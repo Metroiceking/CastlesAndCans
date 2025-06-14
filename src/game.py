@@ -42,8 +42,9 @@ class HardwareInterface:
     def activate_tunnel(self, tunnel: int):
         print(f"[HW] ACTIVATE_TUNNEL_{tunnel}")
 
-    def raise_platform(self):
-        print("[HW] RAISE_PONG_PLATFORM")
+    def launch_plunger(self):
+        """Fire the plunger to launch the ball."""
+        print("[HW] LAUNCH_PLUNGER")
 
 
 class CastlesAndCansGame:
@@ -86,6 +87,9 @@ class CastlesAndCansGame:
             self.progress_labels.append(lbl)
         self.progress_frame.pack(pady=10)
 
+        self.target_label = tk.Label(self.root, text="", font=("Arial", 18))
+        self.target_label.pack(pady=5)
+
         self.ball_label = tk.Label(self.root, text="", font=("Arial", 18))
         self.ball_label.pack(pady=5)
 
@@ -96,6 +100,7 @@ class CastlesAndCansGame:
         self.state = GameState.COIN_FLIP
         self.status_label.config(text="Flipping coin...")
         self.ball_label.config(text="")
+        self.target_label.config(text="")
         self.ball_in_play = False
         self.target_hits = {Team.RED: 0, Team.GREEN: 0}
         self.expected_target = {Team.RED: 1, Team.GREEN: 1}
@@ -110,13 +115,15 @@ class CastlesAndCansGame:
 
     def hit_target(self, target: int):
 
-        """Register a target hit. Always output the hardware event.
+            self.status_label.config(text=f"Target {target} hit out of order - await tunnel")
+            self.state = GameState.AWAITING_TUNNEL
 
-        Progress only advances when the game is in ``BALL_LAUNCHED`` state and
-        the correct target for the current team is hit. Other hits merely show a
-        message so key presses are visible when testing.
-        """
-
+        self.hw.drop_gate()
+        self.hw.launch_plunger()
+            self.hw.launch_plunger()
+            if self.state != GameState.CHUG:
+                self.state = GameState.BALL_LAUNCHED
+        self.target_label.config(text=f"Next target: {self.expected_target[self.current_team]}")
         self.hw.hit_target(target)
 
         if self.state != GameState.BALL_LAUNCHED:
