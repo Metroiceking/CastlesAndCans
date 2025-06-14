@@ -46,6 +46,9 @@ class HardwareInterface:
         """Fire the plunger to launch the ball."""
         print("[HW] LAUNCH_PLUNGER")
 
+    def restore_targets(self, team: Team, hits: int):
+        """Reset the physical targets to match the team's progress."""
+        print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
 class CastlesAndCansGame:
     def __init__(self, root: tk.Tk):
@@ -104,26 +107,26 @@ class CastlesAndCansGame:
         self.ball_in_play = False
         self.target_hits = {Team.RED: 0, Team.GREEN: 0}
         self.expected_target = {Team.RED: 1, Team.GREEN: 1}
+        self.hw.restore_targets(Team.RED, 0)
+        self.hw.restore_targets(Team.GREEN, 0)
+
         self.root.after(1000, self.finish_coin_flip)
 
     def finish_coin_flip(self):
         self.current_team = random.choice([Team.RED, Team.GREEN])
         self.status_label.config(text=f"{self.current_team.value} starts!")
+        self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.state = GameState.PLAYER_TURN
         self.update_progress()
         self.ball_label.config(text="Press 'p' to launch ball")
 
     def hit_target(self, target: int):
+        """Register a target hit. Always output the hardware event.
 
-            self.status_label.config(text=f"Target {target} hit out of order - await tunnel")
-            self.state = GameState.AWAITING_TUNNEL
-
-        self.hw.drop_gate()
-        self.hw.launch_plunger()
-            self.hw.launch_plunger()
-            if self.state != GameState.CHUG:
-                self.state = GameState.BALL_LAUNCHED
-        self.target_label.config(text=f"Next target: {self.expected_target[self.current_team]}")
+        Progress only advances when the game is in ``BALL_LAUNCHED`` state and
+        the correct target for the current team is hit. Other hits merely show a
+        message so key presses are visible when testing.
+        """
         self.hw.hit_target(target)
 
         if self.state != GameState.BALL_LAUNCHED:
@@ -145,8 +148,9 @@ class CastlesAndCansGame:
         else:
             print("[HW] NEUTRAL_SOUND")
 
-            self.status_label.config(text=f"Target {target} hit out of order")
+            self.status_label.config(text=f"Target {target} hit out of order - await tunnel")
             self.awaiting_tunnel = False
+            self.state = GameState.AWAITING_TUNNEL
 
     def win_game(self):
         """Handle a victory for the current team."""
@@ -154,6 +158,7 @@ class CastlesAndCansGame:
         self.ball_in_play = False
         self.status_label.config(text=f"{self.current_team.value} WINS!")
         self.ball_label.config(text="")
+        self.hw.drop_gate()
 
     def start_chug_phase(self):
         self.state = GameState.CHUG
@@ -167,7 +172,9 @@ class CastlesAndCansGame:
     def launch_ball(self):
         if self.state != GameState.PLAYER_TURN:
             return
-        self.hw.raise_platform()
+
+        self.hw.launch_plunger()
+
         self.ball_in_play = True
         self.state = GameState.BALL_LAUNCHED
         self.ball_label.config(text="Ball launched")
@@ -183,10 +190,11 @@ class CastlesAndCansGame:
 
     def launch_countdown(self, count: int):
         if count == 0:
-            self.hw.raise_platform()
-            self.ball_in_play = True
 
-            # Keep CHUG state so the player keeps chugging until the ball returns
+            self.hw.launch_plunger()
+            self.ball_in_play = True
+            if self.state != GameState.CHUG:
+                self.state = GameState.BALL_LAUNCHED
 
             self.ball_label.config(text="Ball launched - waiting for return")
         else:
@@ -219,6 +227,7 @@ class CastlesAndCansGame:
             return
         self.current_team = Team.GREEN if self.current_team == Team.RED else Team.RED
         self.status_label.config(text=f"{self.current_team.value} turn - hit target {self.expected_target[self.current_team]}")
+        self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
         self.ball_in_play = False
         self.ball_label.config(text="Press 'p' to launch ball")
@@ -233,6 +242,7 @@ class CastlesAndCansGame:
                 lbl.config(text='●', fg=color)
             else:
                 lbl.config(text='○', fg='black')
+        self.target_label.config(text=f"Next target: {self.expected_target[self.current_team]}")
 
     def handle_key(self, event):
         key = event.keysym.lower()
@@ -250,8 +260,6 @@ class CastlesAndCansGame:
             self.tunnel_triggered()
         elif key == 'b':
             self.ball_returned()
-        elif key == 'd':
-            self.hw.drop_gate()
         elif key == 'p':
             self.launch_ball()
 
