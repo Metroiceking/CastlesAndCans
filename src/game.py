@@ -113,9 +113,14 @@ class CastlesAndCansGame:
         """Register a target hit. Always output the hardware event.
 
         Progress only advances when the game is in ``BALL_LAUNCHED`` state and
-        the correct target for the current team is hit. Other hits merely show a
-        message so key presses are visible when testing.
-        """
+        """Handle a victory for the current team."""
+        self.ball_in_play = False
+            # Keep CHUG state so the player keeps chugging until the ball returns
+            self.ball_in_play = False
+            if self.state != GameState.GAME_OVER:
+                self.root.after(2000, self.next_turn)
+            if self.state != GameState.GAME_OVER:
+                self.root.after(1000, self.next_turn)
         self.hw.hit_target(target)
 
         if self.state != GameState.BALL_LAUNCHED:
