@@ -113,14 +113,10 @@ class CastlesAndCansGame:
         """Register a target hit. Always output the hardware event.
 
         Progress only advances when the game is in ``BALL_LAUNCHED`` state and
-        """Handle a victory for the current team."""
-        self.ball_in_play = False
-            # Keep CHUG state so the player keeps chugging until the ball returns
-            self.ball_in_play = False
-            if self.state != GameState.GAME_OVER:
-                self.root.after(2000, self.next_turn)
-            if self.state != GameState.GAME_OVER:
-                self.root.after(1000, self.next_turn)
+        the correct target for the current team is hit. Other hits merely show a
+        message so key presses are visible when testing.
+        """
+
         self.hw.hit_target(target)
 
         if self.state != GameState.BALL_LAUNCHED:
@@ -142,11 +138,13 @@ class CastlesAndCansGame:
         else:
             print("[HW] NEUTRAL_SOUND")
 
-            self.status_label.config(text=f"Target {target} hit out of order")\
+            self.status_label.config(text=f"Target {target} hit out of order")
             self.awaiting_tunnel = False
 
     def win_game(self):
+        """Handle a victory for the current team."""
         self.state = GameState.GAME_OVER
+        self.ball_in_play = False
         self.status_label.config(text=f"{self.current_team.value} WINS!")
         self.ball_label.config(text="")
 
@@ -180,7 +178,9 @@ class CastlesAndCansGame:
         if count == 0:
             self.hw.raise_platform()
             self.ball_in_play = True
-            self.state = GameState.BALL_LAUNCHED
+
+            # Keep CHUG state so the player keeps chugging until the ball returns
+
             self.ball_label.config(text="Ball launched - waiting for return")
         else:
             self.ball_label.config(text=f"Launching in {count}...")
@@ -196,11 +196,16 @@ class CastlesAndCansGame:
         if self.state == GameState.CHUG:
             self.hw.stop_chug(self.current_team)
             self.ball_label.config(text="Ball returned! Stop chugging")
-            self.root.after(2000, self.next_turn)
+
+            self.ball_in_play = False
+            if self.state != GameState.GAME_OVER:
+                self.root.after(2000, self.next_turn)
         elif self.ball_in_play:
             self.ball_label.config(text="Ball returned")
             self.ball_in_play = False
-            self.root.after(1000, self.next_turn)
+            if self.state != GameState.GAME_OVER:
+                self.root.after(1000, self.next_turn)
+
 
     def next_turn(self):
         if self.current_team is None:
