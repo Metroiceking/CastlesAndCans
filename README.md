@@ -30,4 +30,6 @@ The prototype uses keyboard keys to mimic hardware buttons:
 - **t** – Tunnel sensor triggered
 - **d** – Drop gate
 
+A missed shot automatically ends the turn once the ball is returned.
+
 Hardware-specific functions are still implemented as console print statements. Integrate with GPIO libraries on the Raspberry Pi as development continues.

@@ -162,6 +162,7 @@ class CastlesAndCansGame:
         if count == 0:
             self.hw.raise_platform()
             self.ball_in_play = True
+            self.state = GameState.BALL_LAUNCHED
             self.ball_label.config(text="Ball launched - waiting for return")
         else:
             self.ball_label.config(text=f"Launching in {count}...")
@@ -181,7 +182,7 @@ class CastlesAndCansGame:
         elif self.ball_in_play:
             self.ball_label.config(text="Ball returned")
             self.ball_in_play = False
-            self.state = GameState.PLAYER_TURN
+            self.root.after(1000, self.next_turn)
 
     def next_turn(self):
         if self.current_team is None:
