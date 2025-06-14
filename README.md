@@ -14,7 +14,7 @@ Ensure Python 3 with Tkinter is installed. Launch the prototype with:
 python3 src/game.py
 ```
 
-This will open a window demonstrating the UI flow: start/reset, coin flip, turn switching and a basic chug phase.
+This will open a window demonstrating the UI flow: start/reset, coin flip and alternating turns. Targets must be hit in order; hitting the wrong target simply plays a neutral effect. After a successful hit the tunnel trigger starts a short countdown, launches the ball back and instructs the thrower to chug until the ball returns.
 
 ### Keyboard controls
 
@@ -27,6 +27,7 @@ The prototype uses keyboard keys to mimic hardware buttons:
 - **1**..**5** – Hit targets 1‑5
 - **p** – Launch ball (raise platform)
 - **b** – Signal that the ball returned
+- **t** – Tunnel sensor triggered
 - **d** – Drop gate
 
 Hardware-specific functions are still implemented as console print statements. Integrate with GPIO libraries on the Raspberry Pi as development continues.

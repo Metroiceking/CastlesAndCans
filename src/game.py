@@ -14,8 +14,9 @@ class Team(Enum):
 class GameState(Enum):
     WAITING_START = auto()
     COIN_FLIP = auto()
-    IN_PLAY = auto()
-    BALL_IN_PLAY = auto()
+    PLAYER_TURN = auto()
+    BALL_LAUNCHED = auto()
+    AWAITING_TUNNEL = auto()
     CHUG = auto()
     GAME_OVER = auto()
 
@@ -52,6 +53,9 @@ class CastlesAndCansGame:
         self.hw = HardwareInterface()
         self.current_team = None
         self.target_hits = {Team.RED: 0, Team.GREEN: 0}
+        self.expected_target = {Team.RED: 1, Team.GREEN: 1}
+        self.awaiting_tunnel = False
+        self.prev_status = ""
         self.setup_ui()
         self.root.bind('<Key>', self.handle_key)
         self.ball_in_play = False
@@ -67,10 +71,10 @@ class CastlesAndCansGame:
         self.force_next_button = tk.Button(self.root, text="Force Next Turn", command=self.next_turn)
         self.force_next_button.pack(side=tk.LEFT, padx=10)
 
-        self.dispense_red = tk.Button(self.root, text="Dispense Red", command=lambda: self.hw.dispense(Team.RED))
+        self.dispense_red = tk.Button(self.root, text="Dispense Red", command=lambda: self.dispense_beer(Team.RED))
         self.dispense_red.pack(side=tk.LEFT, padx=10)
 
-        self.dispense_green = tk.Button(self.root, text="Dispense Green", command=lambda: self.hw.dispense(Team.GREEN))
+        self.dispense_green = tk.Button(self.root, text="Dispense Green", command=lambda: self.dispense_beer(Team.GREEN))
         self.dispense_green.pack(side=tk.LEFT, padx=10)
 
         self.progress_frame = tk.Frame(self.root)
@@ -89,57 +93,101 @@ class CastlesAndCansGame:
         self.status_label.config(text="Flipping coin...")
         self.ball_label.config(text="")
         self.ball_in_play = False
+        self.target_hits = {Team.RED: 0, Team.GREEN: 0}
+        self.expected_target = {Team.RED: 1, Team.GREEN: 1}
         self.root.after(1000, self.finish_coin_flip)
 
     def finish_coin_flip(self):
         self.current_team = random.choice([Team.RED, Team.GREEN])
         self.status_label.config(text=f"{self.current_team.value} starts!")
-        self.state = GameState.IN_PLAY
+        self.state = GameState.PLAYER_TURN
         self.update_progress()
         self.ball_label.config(text="Press 'p' to launch ball")
 
     def hit_target(self, target: int):
-        self.hw.hit_target(target)
-        self.target_hits[self.current_team] += 1
-        self.update_progress()
-        if self.target_hits[self.current_team] >= 5:
-            self.start_chug_phase()
+        if self.state != GameState.BALL_LAUNCHED:
+            return
+        if target == self.expected_target[self.current_team]:
+            self.hw.hit_target(target)
+            self.target_hits[self.current_team] += 1
+            self.expected_target[self.current_team] += 1
+            self.update_progress()
+            if self.target_hits[self.current_team] >= 5:
+                self.win_game()
+                return
+            self.status_label.config(text=f"Target {target} hit! Await tunnel")
+            self.state = GameState.AWAITING_TUNNEL
+            self.awaiting_tunnel = True
+        else:
+            print("[HW] NEUTRAL_SOUND")
+            self.status_label.config(text="Wrong target")
+            self.awaiting_tunnel = False
+
+    def win_game(self):
+        self.state = GameState.GAME_OVER
+        self.status_label.config(text=f"{self.current_team.value} WINS!")
+        self.ball_label.config(text="")
 
     def start_chug_phase(self):
         self.state = GameState.CHUG
         self.hw.start_chug(self.current_team)
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
-        self.root.after(5000, self.end_chug_phase)
 
     def end_chug_phase(self):
         self.hw.stop_chug(self.current_team)
         self.next_turn()
 
     def launch_ball(self):
-        if self.state not in (GameState.IN_PLAY, GameState.BALL_IN_PLAY):
+        if self.state != GameState.PLAYER_TURN:
             return
-        if not self.ball_in_play:
+        self.hw.raise_platform()
+        self.ball_in_play = True
+        self.state = GameState.BALL_LAUNCHED
+        self.ball_label.config(text="Ball launched")
+
+    def tunnel_triggered(self):
+        if self.state not in (GameState.AWAITING_TUNNEL, GameState.BALL_LAUNCHED):
+            return
+        self.hw.activate_tunnel(1)
+        self.ball_in_play = False
+        if self.awaiting_tunnel:
+            self.start_chug_phase()
+        self.launch_countdown(3)
+
+    def launch_countdown(self, count: int):
+        if count == 0:
             self.hw.raise_platform()
             self.ball_in_play = True
-            self.state = GameState.BALL_IN_PLAY
-            self.ball_label.config(text="Ball launched - press 'b' when returned")
+            self.ball_label.config(text="Ball launched - waiting for return")
+        else:
+            self.ball_label.config(text=f"Launching in {count}...")
+            self.root.after(1000, lambda: self.launch_countdown(count - 1))
+
+    def dispense_beer(self, team: Team):
+        self.prev_status = self.status_label.cget("text")
+        self.status_label.config(text=f"Dispensing beer for {team.value}")
+        self.hw.dispense(team)
+        self.root.after(2000, lambda: self.status_label.config(text=self.prev_status))
 
     def ball_returned(self):
-        if self.ball_in_play:
-            self.hw.activate_tunnel(1)
-            self.ball_in_play = False
-            self.state = GameState.IN_PLAY
+        if self.state == GameState.CHUG:
+            self.hw.stop_chug(self.current_team)
+            self.ball_label.config(text="Ball returned! Stop chugging")
+            self.root.after(2000, self.next_turn)
+        elif self.ball_in_play:
             self.ball_label.config(text="Ball returned")
+            self.ball_in_play = False
+            self.state = GameState.PLAYER_TURN
 
     def next_turn(self):
         if self.current_team is None:
             return
-        self.target_hits[self.current_team] = 0
         self.current_team = Team.GREEN if self.current_team == Team.RED else Team.RED
-        self.status_label.config(text=f"{self.current_team.value} turn")
+        self.status_label.config(text=f"{self.current_team.value} turn - hit target {self.expected_target[self.current_team]}")
         self.update_progress()
         self.ball_in_play = False
         self.ball_label.config(text="Press 'p' to launch ball")
+        self.awaiting_tunnel = False
 
     def update_progress(self):
         hits = self.target_hits[self.current_team]
@@ -157,11 +205,13 @@ class CastlesAndCansGame:
         elif key == 'n':
             self.next_turn()
         elif key == 'r':
-            self.hw.dispense(Team.RED)
+            self.dispense_beer(Team.RED)
         elif key == 'g':
-            self.hw.dispense(Team.GREEN)
+            self.dispense_beer(Team.GREEN)
         elif key in ['1', '2', '3', '4', '5']:
             self.hit_target(int(key))
+        elif key == 't':
+            self.tunnel_triggered()
         elif key == 'b':
             self.ball_returned()
         elif key == 'd':
