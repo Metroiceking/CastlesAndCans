@@ -24,6 +24,7 @@ The prototype uses keyboard keys to mimic hardware buttons:
 - **n** – Force next turn
 - **r** – Dispense beer for the Red team
 - **g** – Dispense beer for the Green team
+
 - **1**..**5** – Trigger target sensors (progresses only if the next target is hit while the ball is in play)
 - **p** – Launch ball (raise platform)
 - **b** – Signal that the ball returned
