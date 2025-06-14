@@ -109,6 +109,7 @@ class CastlesAndCansGame:
         self.ball_label.config(text="Press 'p' to launch ball")
 
     def hit_target(self, target: int):
+
         """Register a target hit. Always output the hardware event.
 
         Progress only advances when the game is in ``BALL_LAUNCHED`` state and
@@ -123,6 +124,7 @@ class CastlesAndCansGame:
             return
 
         if target == self.expected_target[self.current_team]:
+
             self.target_hits[self.current_team] += 1
             self.expected_target[self.current_team] += 1
             self.update_progress()
@@ -134,7 +136,8 @@ class CastlesAndCansGame:
             self.awaiting_tunnel = True
         else:
             print("[HW] NEUTRAL_SOUND")
-            self.status_label.config(text=f"Target {target} hit out of order")
+
+            self.status_label.config(text=f"Target {target} hit out of order")\
             self.awaiting_tunnel = False
 
     def win_game(self):
@@ -239,4 +242,5 @@ class CastlesAndCansGame:
 if __name__ == "__main__":
     root = tk.Tk()
     game = CastlesAndCansGame(root)
+
     root.mainloop()
