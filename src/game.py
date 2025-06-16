@@ -69,16 +69,41 @@ class CameraInterface:
         self.capture_dir = capture_dir
         os.makedirs(self.capture_dir, exist_ok=True)
 
+        # Determine which camera command is available on the system.
+        self.command = None
+        if shutil.which("libcamera-still"):
+            # ``libcamera-still`` is the default on newer Pi OS releases
+            self.command = ["libcamera-still", "-n", "-t", "1", "-o"]
+        elif shutil.which("raspistill"):
+            # ``raspistill`` for legacy camera stack
+            self.command = ["raspistill", "-n", "-t", "1", "-o"]
+        else:
+            print("[Camera] No camera command found. Using placeholder images")
+
+    def _placeholder_image(self, path: str):
+        """Create a blank placeholder image when the camera is unavailable."""
+        if Image:
+            img = Image.new("RGB", (640, 480), color="black")
+            img.save(path)
+        else:
+            with open(path, "wb") as f:
+                pass
+
     def capture_image(self, prefix: str) -> str:
         """Capture an image and return the file path."""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{prefix}_{timestamp}.jpg"
         path = os.path.join(self.capture_dir, filename)
-        # Placeholder for actual camera command. Replace with picamera2 or
-        # libcamera-still on the Raspberry Pi.
-        print(f"[HW] CAPTURE_IMAGE {path}")
-        with open(path, "wb") as f:
-            pass
+
+        if self.command:
+            try:
+                subprocess.check_call(self.command + [path])
+            except Exception as exc:
+                print(f"[Camera] Failed to capture image: {exc}")
+                self._placeholder_image(path)
+        else:
+            self._placeholder_image(path)
+
         return path
 
 class RCloneUploader:
