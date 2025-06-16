@@ -110,15 +110,27 @@ class CastlesAndCansGame:
         self.hw.restore_targets(Team.RED, 0)
         self.hw.restore_targets(Team.GREEN, 0)
 
-        self.root.after(1000, self.finish_coin_flip)
+        self.status_label.config(text=f"{self.current_team.value} starts - hit target {self.expected_target[self.current_team]}")
+        self.ball_label.config(text="Throw ball at the castle")
+        Progress only advances when the game is in ``PLAYER_TURN`` state and
+        if self.state != GameState.PLAYER_TURN:
+            # Show feedback even if the hit occurs at the wrong time
+            self.status_label.config(text=f"Target {target} hit (not your turn)")
+        """Handle the ball entering the tunnel."""
+        if self.state not in (
+            GameState.AWAITING_TUNNEL,
+            GameState.BALL_LAUNCHED,
+            GameState.PLAYER_TURN,
+        ):
 
-    def finish_coin_flip(self):
-        self.current_team = random.choice([Team.RED, Team.GREEN])
-        self.status_label.config(text=f"{self.current_team.value} starts!")
-        self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
-        self.state = GameState.PLAYER_TURN
+
+            # Successful target hit begins chugging while the ball is returned
+            self.status_label.config(text=f"{self.current_team.value} target cleared! Chug!")
+        else:
+            self.status_label.config(text="Tunnel triggered - returning ball")
+
         self.update_progress()
-        self.ball_label.config(text="Press 'p' to launch ball")
+        self.ball_label.config(text="Throw ball at the castle")
 
     def hit_target(self, target: int):
         """Register a target hit. Always output the hardware event.
