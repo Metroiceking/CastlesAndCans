@@ -68,6 +68,13 @@ class CameraInterface:
     def __init__(self, capture_dir: str = "captures"):
         self.capture_dir = capture_dir
         os.makedirs(self.capture_dir, exist_ok=True)
+        # Remove any leftover captures from a previous run
+        for f in os.listdir(self.capture_dir):
+            if f.lower().endswith(".jpg"):
+                try:
+                    os.remove(os.path.join(self.capture_dir, f))
+                except OSError as exc:
+                    print(f"[Camera] Failed to remove old capture {f}: {exc}")
 
         # Determine which camera command is available on the system.
         self.command = None
@@ -124,8 +131,6 @@ class RCloneUploader:
     def upload(self, filepath: str):
         if not self.enabled:
             print("[RClone] Upload skipped - uploader not configured")
-            if os.path.exists(filepath):
-                os.remove(filepath)
             return
 
         try:
@@ -134,8 +139,7 @@ class RCloneUploader:
         except Exception as exc:
             print(f"[RClone] Failed to upload {filepath}: {exc}")
         finally:
-            if os.path.exists(filepath):
-                os.remove(filepath)
+            pass
 
 class CastlesAndCansGame:
     def __init__(self, root: tk.Tk):
