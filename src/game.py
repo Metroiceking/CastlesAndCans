@@ -170,6 +170,7 @@ class RCloneUploader:
         finally:
             pass
 
+
 class CastlesAndCansGame:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -268,6 +269,7 @@ class CastlesAndCansGame:
         self.target_label.pack(pady=5)
 
 
+
         # Fullscreen overlay for photos with centered text
         self.overlay = tk.Frame(self.root, bg=BG_COLOR)
         self.overlay_image = tk.Label(self.overlay, bg=BG_COLOR)
@@ -277,7 +279,7 @@ class CastlesAndCansGame:
             text="",
             font=TITLE_FONT,
             fg=FG_COLOR,
-            bg="",
+            bg=BG_COLOR,
         )
         self.overlay_text.place(relx=0.5, rely=0.5, anchor="center")
         self.overlay.place_forget()
