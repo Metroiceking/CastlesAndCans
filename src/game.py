@@ -110,24 +110,13 @@ class CastlesAndCansGame:
         self.hw.restore_targets(Team.RED, 0)
         self.hw.restore_targets(Team.GREEN, 0)
 
+        self.root.after(1000, self.finish_coin_flip)
+
+    def finish_coin_flip(self):
+        self.current_team = random.choice([Team.RED, Team.GREEN])
         self.status_label.config(text=f"{self.current_team.value} starts - hit target {self.expected_target[self.current_team]}")
-        self.ball_label.config(text="Throw ball at the castle")
-        Progress only advances when the game is in ``PLAYER_TURN`` state and
-        if self.state != GameState.PLAYER_TURN:
-            # Show feedback even if the hit occurs at the wrong time
-            self.status_label.config(text=f"Target {target} hit (not your turn)")
-        """Handle the ball entering the tunnel."""
-        if self.state not in (
-            GameState.AWAITING_TUNNEL,
-            GameState.BALL_LAUNCHED,
-            GameState.PLAYER_TURN,
-        ):
-
-
-            # Successful target hit begins chugging while the ball is returned
-            self.status_label.config(text=f"{self.current_team.value} target cleared! Chug!")
-        else:
-            self.status_label.config(text="Tunnel triggered - returning ball")
+        self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
+        self.state = GameState.PLAYER_TURN
 
         self.update_progress()
         self.ball_label.config(text="Throw ball at the castle")
@@ -135,15 +124,16 @@ class CastlesAndCansGame:
     def hit_target(self, target: int):
         """Register a target hit. Always output the hardware event.
 
-        Progress only advances when the game is in ``BALL_LAUNCHED`` state and
+        Progress only advances when the game is in ``PLAYER_TURN`` state and
+
         the correct target for the current team is hit. Other hits merely show a
         message so key presses are visible when testing.
         """
         self.hw.hit_target(target)
 
-        if self.state != GameState.BALL_LAUNCHED:
-            # Show feedback even if the ball hasn't been launched yet
-            self.status_label.config(text=f"Target {target} hit (ball not in play)")
+        if self.state != GameState.PLAYER_TURN:
+            # Show feedback even if the hit occurs at the wrong time
+            self.status_label.config(text=f"Target {target} hit (not your turn)")
             return
 
         if target == self.expected_target[self.current_team]:
@@ -159,7 +149,6 @@ class CastlesAndCansGame:
             self.awaiting_tunnel = True
         else:
             print("[HW] NEUTRAL_SOUND")
-
             self.status_label.config(text=f"Target {target} hit out of order - await tunnel")
             self.awaiting_tunnel = False
             self.state = GameState.AWAITING_TUNNEL
@@ -192,12 +181,25 @@ class CastlesAndCansGame:
         self.ball_label.config(text="Ball launched")
 
     def tunnel_triggered(self):
-        if self.state not in (GameState.AWAITING_TUNNEL, GameState.BALL_LAUNCHED):
+
+        """Handle the ball entering the tunnel."""
+        if self.state not in (
+            GameState.AWAITING_TUNNEL,
+            GameState.BALL_LAUNCHED,
+            GameState.PLAYER_TURN,
+        ):
             return
+
         self.hw.activate_tunnel(1)
         self.ball_in_play = False
+
         if self.awaiting_tunnel:
+            # Successful target hit begins chugging while the ball is returned
             self.start_chug_phase()
+            self.status_label.config(text=f"{self.current_team.value} target cleared! Chug!")
+        else:
+            self.status_label.config(text="Tunnel triggered - returning ball")
+
         self.launch_countdown(3)
 
     def launch_countdown(self, count: int):
@@ -242,7 +244,9 @@ class CastlesAndCansGame:
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
         self.ball_in_play = False
-        self.ball_label.config(text="Press 'p' to launch ball")
+
+        self.ball_label.config(text="Throw ball at the castle")
+
         self.awaiting_tunnel = False
         self.state = GameState.PLAYER_TURN
 
