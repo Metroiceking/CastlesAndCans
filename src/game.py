@@ -10,6 +10,7 @@ from typing import Optional
 import subprocess
 import shutil
 import sys
+import threading
 
 try:
     from PIL import Image, ImageTk  # Requires Pillow and ImageTk support
@@ -134,7 +135,11 @@ class CameraInterface:
 
         if self.command:
             try:
-                subprocess.check_call(self.command + [path])
+                subprocess.check_call(
+                    self.command + [path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
             except Exception as exc:
                 print(f"[Camera] Failed to capture image: {exc}")
                 self._placeholder_image(path)
@@ -353,8 +358,8 @@ class CastlesAndCansGame:
         self.state = GameState.CHUG
         self.hw.start_chug(self.current_team)
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
-        # Capture a chug photo after a short delay but don't display it yet
-        self.root.after(2000, lambda: setattr(self, 'chug_photo', self.capture_image('chug', show=False)))
+        # Capture a chug photo after a short delay without blocking
+        self.root.after(2000, lambda: self.capture_image('chug', show=False, store_attr='chug_photo'))
 
     def end_chug_phase(self):
         self.hw.stop_chug(self.current_team)
@@ -447,26 +452,32 @@ class CastlesAndCansGame:
         self.overlay_image.config(image=photo)
         self.overlay_image.image = photo
         self.overlay_text.config(text=text)
-        self.overlay_text.lift()
         if self._anim_id:
             self.root.after_cancel(self._anim_id)
         self.overlay.place(x=0, y=self.root.winfo_height(), relwidth=1, relheight=1)
+        self.overlay_text.lift()
         self._anim_id = None
-        self._animate_overlay(-20)
+        self._slide_overlay(0)
 
-    def _animate_overlay(self, step: int):
-        """Animate the overlay sliding in or out."""
-        y = self.overlay.winfo_y() + step
-        if step < 0 and y <= 0:
-            self.overlay.place(y=0, relwidth=1, relheight=1)
-            self._anim_id = None
-            return
-        if step > 0 and y >= self.root.winfo_height():
-            self.overlay.place_forget()
-            self._anim_id = None
-            return
-        self.overlay.place(y=y, relwidth=1, relheight=1)
-        self._anim_id = self.root.after(20, self._animate_overlay, step)
+    def _slide_overlay(self, target_y: int, duration: int = 400):
+        """Smoothly slide the overlay to ``target_y`` over ``duration`` ms."""
+        start_y = self.overlay.winfo_y()
+        distance = target_y - start_y
+        steps = max(1, int(duration / 16))
+        step = distance / steps
+
+        def animate(count=0):
+            y = start_y + step * count
+            self.overlay.place(y=int(y), relwidth=1, relheight=1)
+            if count < steps:
+                self._anim_id = self.root.after(16, animate, count + 1)
+            else:
+                self.overlay.place(y=target_y, relwidth=1, relheight=1)
+                if target_y >= self.root.winfo_height():
+                    self.overlay.place_forget()
+                self._anim_id = None
+
+        animate()
 
     def hide_overlay(self):
         """Slide the overlay off the screen."""
@@ -474,26 +485,31 @@ class CastlesAndCansGame:
             if self._anim_id:
                 self.root.after_cancel(self._anim_id)
                 self._anim_id = None
-            self._animate_overlay(20)
+            self._slide_overlay(self.root.winfo_height())
 
-    def capture_image(self, prefix: str, show: bool = True):
-        """Capture an image and optionally show it fullscreen."""
-        path = self.camera.capture_image(prefix)
-        photo = None
-        if Image and ImageTk:
-            try:
-                img = Image.open(path)
-                img = img.resize((800, 480))
-                photo = ImageTk.PhotoImage(img)
-                if show:
-                    self.show_overlay(photo, "")
-                    self.root.after(2000, self.hide_overlay)
-            except Exception as exc:
-                print(f"Failed to load image {path}: {exc}")
-        else:
-            print("[Init] Pillow not available - skipping image preview")
-        self.drive.upload(path)
-        return photo
+    def capture_image(self, prefix: str, show: bool = True, store_attr: Optional[str] = None):
+        """Capture an image asynchronously and optionally show it."""
+
+        def worker():
+            path = self.camera.capture_image(prefix)
+            photo = None
+            if Image and ImageTk:
+                try:
+                    img = Image.open(path)
+                    img = img.resize((800, 480))
+                    photo = ImageTk.PhotoImage(img)
+                except Exception as exc:
+                    print(f"Failed to load image {path}: {exc}")
+            else:
+                print("[Init] Pillow not available - skipping image preview")
+
+            self.drive.upload(path)
+            if store_attr is not None:
+                setattr(self, store_attr, photo)
+            if show and photo:
+                self.root.after(0, lambda: [self.show_overlay(photo, ""), self.root.after(3000, self.hide_overlay)])
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def handle_key(self, event):
         key = event.keysym.lower()
