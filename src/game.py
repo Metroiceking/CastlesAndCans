@@ -6,6 +6,7 @@ import random
 import datetime
 import tkinter as tk
 from enum import Enum, auto
+from typing import Optional
 import subprocess
 import shutil
 
@@ -83,7 +84,7 @@ class CameraInterface:
 class RCloneUploader:
     """Upload files using rclone and remove them locally."""
 
-    def __init__(self, remote: str | None = None):
+    def __init__(self, remote: Optional[str] = None):
         self.remote = remote
         self.enabled = False
         if not remote:
