@@ -72,7 +72,6 @@ class HardwareInterface:
         """Reset the physical targets to match the team's progress."""
         print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
-
 class CameraInterface:
     """Handle capturing images from the Pi camera."""
 
@@ -142,7 +141,6 @@ class CameraInterface:
             self._placeholder_image(path)
 
         return path
-
 
 class RCloneUploader:
     """Upload files using rclone and remove them locally."""
