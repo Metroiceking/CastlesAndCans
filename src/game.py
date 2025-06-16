@@ -9,6 +9,7 @@ from enum import Enum, auto
 from typing import Optional
 import subprocess
 import shutil
+import sys
 
 try:
     from PIL import Image, ImageTk  # Requires Pillow and ImageTk support
@@ -266,6 +267,7 @@ class CastlesAndCansGame:
         )
         self.target_label.pack(pady=5)
 
+
         # Fullscreen overlay for photos with centered text
         self.overlay = tk.Frame(self.root, bg=BG_COLOR)
         self.overlay_image = tk.Label(self.overlay, bg=BG_COLOR)
@@ -471,7 +473,6 @@ class CastlesAndCansGame:
                 if show:
                     self.show_overlay(photo, "")
                     self.root.after(2000, self.hide_overlay)
-
             except Exception as exc:
                 print(f"Failed to load image {path}: {exc}")
         else:
@@ -500,6 +501,10 @@ class CastlesAndCansGame:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        print(f"[Error] Tk initialization failed: {exc}")
+        sys.exit(1)
     game = CastlesAndCansGame(root)
     root.mainloop()
