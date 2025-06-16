@@ -57,7 +57,6 @@ class HardwareInterface:
         """Reset the physical targets to match the team's progress."""
         print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
-
 class CameraInterface:
     """Handle capturing images from the Pi camera."""
 
@@ -112,7 +111,6 @@ class GoogleDriveUploader:
             if os.path.exists(filepath):
                 os.remove(filepath)
 
-
 class CastlesAndCansGame:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -129,6 +127,7 @@ class CastlesAndCansGame:
             os.environ.get("GOOGLE_DRIVE_FOLDER_ID"),
         )
         self.chug_photo = None
+
         self.setup_ui()
         # Bind all key events so they register regardless of focus
         self.root.bind_all('<Key>', self.handle_key)
@@ -183,6 +182,7 @@ class CastlesAndCansGame:
         self.expected_target = {Team.RED: 1, Team.GREEN: 1}
         self.hw.restore_targets(Team.RED, 0)
         self.hw.restore_targets(Team.GREEN, 0)
+
         self.root.after(1000, self.finish_coin_flip)
 
     def finish_coin_flip(self):
@@ -190,6 +190,7 @@ class CastlesAndCansGame:
         self.status_label.config(text=f"{self.current_team.value} starts - hit target {self.expected_target[self.current_team]}")
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.state = GameState.PLAYER_TURN
+
         self.update_progress()
         self.ball_label.config(text="Throw ball at the castle")
 
@@ -197,6 +198,7 @@ class CastlesAndCansGame:
         """Register a target hit. Always output the hardware event.
 
         Progress only advances when the game is in ``PLAYER_TURN`` state and
+
         the correct target for the current team is hit. Other hits merely show a
         message so key presses are visible when testing.
         """
@@ -233,11 +235,13 @@ class CastlesAndCansGame:
         self.hw.drop_gate()
 
     def start_chug_phase(self):
+
         """Begin the chug phase once the ball launches."""
         self.state = GameState.CHUG
         self.hw.start_chug(self.current_team)
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
         self.ball_label.config(text="Ball launched - chug!")
+
         # Capture a chug photo after a short delay but don't display it yet
         self.root.after(2000, lambda: setattr(self, 'chug_photo', self.capture_image('chug', show=False)))
 
@@ -246,6 +250,7 @@ class CastlesAndCansGame:
         self.next_turn()
 
     def launch_ball(self):
+
         """Fire the plunger when the game is ready."""
         if self.state != GameState.AWAITING_LAUNCH:
             return
@@ -257,10 +262,12 @@ class CastlesAndCansGame:
             self.state = GameState.BALL_LAUNCHED
             self.ball_label.config(text="Ball launched - waiting for return")
             self.status_label.config(text="Ball launched")
+
         # Clear hit photo once the ball is launched
         self.image_label.config(image='')
 
     def tunnel_triggered(self):
+
         """Handle the ball entering the tunnel."""
         if self.state not in (
             GameState.AWAITING_TUNNEL,
@@ -310,6 +317,7 @@ class CastlesAndCansGame:
         if self.current_team is None:
             return
         self.current_team = Team.GREEN if self.current_team == Team.RED else Team.RED
+
         self.status_label.config(text=f"{self.current_team.value} turn - hit target {self.expected_target[self.current_team]}")
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
@@ -369,4 +377,5 @@ class CastlesAndCansGame:
 if __name__ == "__main__":
     root = tk.Tk()
     game = CastlesAndCansGame(root)
+
     root.mainloop()
