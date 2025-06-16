@@ -199,7 +199,7 @@ class CastlesAndCansGame:
             fg=FG_COLOR,
             bg=BG_COLOR,
         )
-        self.status_label.pack(pady=10, fill=tk.X)
+        self.status_label.pack(pady=20, expand=True, fill=tk.BOTH)
 
         button_frame = tk.Frame(self.root, bg=BG_COLOR)
         self.start_button = tk.Button(
@@ -266,17 +266,19 @@ class CastlesAndCansGame:
         )
         self.target_label.pack(pady=5)
 
-        self.ball_label = tk.Label(
-            self.root,
+        # Fullscreen overlay for photos with centered text
+        self.overlay = tk.Frame(self.root, bg=BG_COLOR)
+        self.overlay_image = tk.Label(self.overlay, bg=BG_COLOR)
+        self.overlay_image.pack(fill=tk.BOTH, expand=True)
+        self.overlay_text = tk.Label(
+            self.overlay,
             text="",
-            font=LABEL_FONT,
+            font=TITLE_FONT,
             fg=FG_COLOR,
-            bg=BG_COLOR,
+            bg="",
         )
-        self.ball_label.pack(pady=5)
-
-        self.image_label = tk.Label(self.root, bg=BG_COLOR)
-        self.image_label.pack(pady=5)
+        self.overlay_text.place(relx=0.5, rely=0.5, anchor="center")
+        self.overlay.place_forget()
 
         # Ensure key events go to the root window
         self.root.focus_set()
@@ -284,9 +286,8 @@ class CastlesAndCansGame:
     def start_game(self):
         self.state = GameState.COIN_FLIP
         self.status_label.config(text="Flipping coin...")
-        self.ball_label.config(text="")
         self.target_label.config(text="")
-        self.image_label.config(image='')
+        self.hide_overlay()
         self.chug_photo = None
         self.ball_in_play = False
         self.target_hits = {Team.RED: 0, Team.GREEN: 0}
@@ -301,7 +302,6 @@ class CastlesAndCansGame:
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.state = GameState.PLAYER_TURN
         self.update_progress()
-        self.ball_label.config(text="Throw ball at the castle")
 
     def hit_target(self, target: int):
         """Register a target hit. Always output the hardware event.
@@ -339,7 +339,6 @@ class CastlesAndCansGame:
         self.state = GameState.GAME_OVER
         self.ball_in_play = False
         self.status_label.config(text=f"{self.current_team.value} WINS!")
-        self.ball_label.config(text="")
         self.hw.drop_gate()
 
     def start_chug_phase(self):
@@ -347,7 +346,6 @@ class CastlesAndCansGame:
         self.state = GameState.CHUG
         self.hw.start_chug(self.current_team)
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
-        self.ball_label.config(text="Ball launched - chug!")
         # Capture a chug photo after a short delay but don't display it yet
         self.root.after(2000, lambda: setattr(self, 'chug_photo', self.capture_image('chug', show=False)))
 
@@ -365,10 +363,8 @@ class CastlesAndCansGame:
             self.start_chug_phase()
         else:
             self.state = GameState.BALL_LAUNCHED
-            self.ball_label.config(text="Ball launched - waiting for return")
             self.status_label.config(text="Ball launched")
-        # Clear hit photo once the ball is launched
-        self.image_label.config(image='')
+        self.hide_overlay()
 
     def tunnel_triggered(self):
         """Handle the ball entering the tunnel."""
@@ -404,14 +400,14 @@ class CastlesAndCansGame:
     def ball_returned(self):
         if self.state == GameState.CHUG:
             self.hw.stop_chug(self.current_team)
-            self.ball_label.config(text="Ball returned! Stop chugging")
+            self.status_label.config(text="Stop chugging")
             self.ball_in_play = False
             if self.chug_photo:
-                self.image_label.config(image=self.chug_photo)
+                self.show_overlay(self.chug_photo, "")
             if self.state != GameState.GAME_OVER:
                 self.root.after(2000, self.next_turn)
         elif self.ball_in_play:
-            self.ball_label.config(text="Ball returned")
+            self.status_label.config(text="Ball returned")
             self.ball_in_play = False
             if self.state != GameState.GAME_OVER:
                 self.root.after(1000, self.next_turn)
@@ -424,10 +420,9 @@ class CastlesAndCansGame:
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
         self.ball_in_play = False
-        self.ball_label.config(text="Throw ball at the castle")
         self.awaiting_tunnel = False
         self.chug_photo = None
-        self.image_label.config(image='')
+        self.hide_overlay()
         self.state = GameState.PLAYER_TURN
 
     def update_progress(self):
@@ -440,18 +435,43 @@ class CastlesAndCansGame:
                 lbl.config(text='○', fg=FG_COLOR)
         self.target_label.config(text=f"Next target: {self.expected_target[self.current_team]}")
 
+    def show_overlay(self, photo, text: str):
+        """Display a fullscreen image with optional text."""
+        self.overlay_image.config(image=photo)
+        self.overlay_image.image = photo
+        self.overlay_text.config(text=text)
+        self.overlay.place(x=0, y=self.root.winfo_height())
+        self._animate_overlay(-20)
+
+    def _animate_overlay(self, step: int):
+        """Animate the overlay sliding in or out."""
+        y = self.overlay.winfo_y() + step
+        if step < 0 and y <= 0:
+            y = 0
+        if step > 0 and y >= self.root.winfo_height():
+            self.overlay.place_forget()
+            return
+        self.overlay.place(y=y, relwidth=1, relheight=1)
+        self.root.after(20, self._animate_overlay, step)
+
+    def hide_overlay(self):
+        """Slide the overlay off the screen."""
+        if self.overlay.winfo_ismapped():
+            self._animate_overlay(20)
+
     def capture_image(self, prefix: str, show: bool = True):
-        """Capture an image, optionally display it, then upload to Drive."""
+        """Capture an image and optionally show it fullscreen."""
         path = self.camera.capture_image(prefix)
         photo = None
         if Image and ImageTk:
             try:
                 img = Image.open(path)
-                img.thumbnail((720, 405))
+                img = img.resize((800, 480))
                 photo = ImageTk.PhotoImage(img)
                 if show:
-                    self.image_label.config(image=photo)
-                    self.image_label.image = photo
+                    self.show_overlay(photo, "")
+                    self.root.after(2000, self.hide_overlay)
+
             except Exception as exc:
                 print(f"Failed to load image {path}: {exc}")
         else:
