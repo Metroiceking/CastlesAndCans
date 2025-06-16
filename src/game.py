@@ -135,25 +135,24 @@ class CastlesAndCansGame:
         if self.state != GameState.PLAYER_TURN:
             # Show feedback even if the hit occurs at the wrong time
             self.status_label.config(text=f"Target {target} hit (not your turn)")
-        """Begin the chug phase once the ball launches."""
-        self.ball_label.config(text="Ball launched - chug!")
-        """Fire the plunger when the game is ready."""
-        if self.state != GameState.AWAITING_LAUNCH:
-        if self.awaiting_tunnel:
-            self.start_chug_phase()
-        else:
-            self.state = GameState.BALL_LAUNCHED
-            self.ball_label.config(text="Ball launched - waiting for return")
-            self.status_label.config(text="Ball launched")
+            return
 
-        self.state = GameState.AWAITING_LAUNCH
-            self.status_label.config(text=f"{self.current_team.value} target cleared! Preparing launch")
-            self.status_label.config(text="Ball entered tunnel")
-        self.root.after(2000, self.ready_to_launch)
-    def ready_to_launch(self):
-        """Display a prompt that the plunger may be fired."""
-        if self.state == GameState.AWAITING_LAUNCH:
-            self.status_label.config(text="Ready to launch - press L")
+        if target == self.expected_target[self.current_team]:
+            self.target_hits[self.current_team] += 1
+            self.expected_target[self.current_team] += 1
+            self.update_progress()
+            if self.target_hits[self.current_team] >= 5:
+                self.win_game()
+                return
+            self.status_label.config(text=f"Target {target} hit! Await tunnel")
+            self.state = GameState.AWAITING_TUNNEL
+            self.awaiting_tunnel = True
+        else:
+            print("[HW] NEUTRAL_SOUND")
+            self.status_label.config(text=f"Target {target} hit out of order - await tunnel")
+            self.awaiting_tunnel = False
+            self.state = GameState.AWAITING_TUNNEL
+
     def win_game(self):
         """Handle a victory for the current team."""
         self.state = GameState.GAME_OVER
@@ -163,23 +162,30 @@ class CastlesAndCansGame:
         self.hw.drop_gate()
 
     def start_chug_phase(self):
+
+        """Begin the chug phase once the ball launches."""
         self.state = GameState.CHUG
         self.hw.start_chug(self.current_team)
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
+        self.ball_label.config(text="Ball launched - chug!")
 
     def end_chug_phase(self):
         self.hw.stop_chug(self.current_team)
         self.next_turn()
 
     def launch_ball(self):
-        if self.state != GameState.PLAYER_TURN:
+
+        """Fire the plunger when the game is ready."""
+        if self.state != GameState.AWAITING_LAUNCH:
             return
-
         self.hw.launch_plunger()
-
         self.ball_in_play = True
-        self.state = GameState.BALL_LAUNCHED
-        self.ball_label.config(text="Ball launched")
+        if self.awaiting_tunnel:
+            self.start_chug_phase()
+        else:
+            self.state = GameState.BALL_LAUNCHED
+            self.ball_label.config(text="Ball launched - waiting for return")
+            self.status_label.config(text="Ball launched")
 
     def tunnel_triggered(self):
 
@@ -193,28 +199,19 @@ class CastlesAndCansGame:
 
         self.hw.activate_tunnel(1)
         self.ball_in_play = False
+        self.state = GameState.AWAITING_LAUNCH
 
         if self.awaiting_tunnel:
-            # Successful target hit begins chugging while the ball is returned
-            self.start_chug_phase()
-            self.status_label.config(text=f"{self.current_team.value} target cleared! Chug!")
+            self.status_label.config(text=f"{self.current_team.value} target cleared! Preparing launch")
         else:
-            self.status_label.config(text="Tunnel triggered - returning ball")
+            self.status_label.config(text="Ball entered tunnel")
 
-        self.launch_countdown(3)
+        self.root.after(2000, self.ready_to_launch)
 
-    def launch_countdown(self, count: int):
-        if count == 0:
-
-            self.hw.launch_plunger()
-            self.ball_in_play = True
-            if self.state != GameState.CHUG:
-                self.state = GameState.BALL_LAUNCHED
-
-            self.ball_label.config(text="Ball launched - waiting for return")
-        else:
-            self.ball_label.config(text=f"Launching in {count}...")
-            self.root.after(1000, lambda: self.launch_countdown(count - 1))
+    def ready_to_launch(self):
+        """Display a prompt that the plunger may be fired."""
+        if self.state == GameState.AWAITING_LAUNCH:
+            self.status_label.config(text="Ready to launch - press L")
 
     def dispense_beer(self, team: Team):
         self.prev_status = self.status_label.cget("text")
@@ -236,18 +233,16 @@ class CastlesAndCansGame:
             if self.state != GameState.GAME_OVER:
                 self.root.after(1000, self.next_turn)
 
-
     def next_turn(self):
         if self.current_team is None:
             return
-        elif key == 'l':
+        self.current_team = Team.GREEN if self.current_team == Team.RED else Team.RED
+
         self.status_label.config(text=f"{self.current_team.value} turn - hit target {self.expected_target[self.current_team]}")
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
         self.ball_in_play = False
-
         self.ball_label.config(text="Throw ball at the castle")
-
         self.awaiting_tunnel = False
         self.state = GameState.PLAYER_TURN
 
@@ -277,12 +272,11 @@ class CastlesAndCansGame:
             self.tunnel_triggered()
         elif key == 'b':
             self.ball_returned()
-        elif key == 'p':
+        elif key == 'l':
             self.launch_ball()
 
 
 if __name__ == "__main__":
     root = tk.Tk()
     game = CastlesAndCansGame(root)
-
     root.mainloop()
