@@ -15,8 +15,9 @@ python3 src/game.py
 ```
 
 The window now features a medieval-style colour scheme with parchment text on a
-dark stone background. The layout fits the 800×480 Pi touchscreen and photos
-captured by the Pi camera are shown at a larger size between turns.
+dark stone background. Photos captured by the Pi camera slide in from the bottom
+to fill the entire screen with the status text overlaid in the centre. The layout
+fits the 800×480 Pi touchscreen so previews no longer spill off the edges.
 
 This will open a window demonstrating the UI flow: start/reset, coin flip and alternating turns. The window displays which target is currently required along with each team's progress. Targets must be hit in order; hitting the wrong target simply plays a neutral effect. Once the correct target is hit the game waits for the tunnel sensor. A couple of seconds after the tunnel triggers the screen shows **Ready to launch**. Press the launch key to fire the plunger. Chugging only begins once the ball is launched and stops when it is returned.
 
@@ -42,7 +43,7 @@ Hardware-specific functions are still implemented as console print statements. I
 
 ### Camera captures and uploads
 
-When a target is hit, the Pi camera snaps a photo that is shown while the game prepares to launch the ball. Another photo is taken a couple of seconds into the chug phase and displayed when the ball returns. These images are automatically uploaded using **rclone** but remain in the `captures` directory for the rest of the session. Old captures are cleaned up whenever the program starts.
+When a target is hit, the Pi camera snaps a photo that slides onto the screen while the game prepares to launch the ball. Another photo is taken a couple of seconds into the chug phase and displayed full screen when the ball returns. These images are automatically uploaded using **rclone** but remain in the `captures` directory for the rest of the session. Old captures are cleaned up whenever the program starts.
 
 The script looks for either `libcamera-still` or `raspistill` to capture photos at **1280×720**. The `--immediate` option is used with `libcamera-still` to minimise shutter lag. If neither command is available the program creates placeholder images instead.
 
