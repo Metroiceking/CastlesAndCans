@@ -21,7 +21,9 @@ attach a screen to the Pi.
 The window now features a medieval-style colour scheme with parchment text on a
 dark stone background. Photos captured by the Pi camera slide in from the bottom
 to fill the entire screen with the status text overlaid in the centre. The layout
-fits the 800×480 Pi touchscreen so previews no longer spill off the edges.
+fits the 800×480 Pi touchscreen so previews no longer spill off the edges. The
+photo overlay now animates smoothly and hides automatically a couple of seconds
+after appearing.
 
 This will open a window demonstrating the UI flow: start/reset, coin flip and alternating turns. The window displays which target is currently required along with each team's progress. Targets must be hit in order; hitting the wrong target simply plays a neutral effect. Once the correct target is hit the game waits for the tunnel sensor. A couple of seconds after the tunnel triggers the screen shows **Ready to launch**. Press the launch key to fire the plunger. Chugging only begins once the ball is launched and stops when it is returned.
 

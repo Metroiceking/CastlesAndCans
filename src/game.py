@@ -72,6 +72,7 @@ class HardwareInterface:
         """Reset the physical targets to match the team's progress."""
         print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
+
 class CameraInterface:
     """Handle capturing images from the Pi camera."""
 
@@ -141,6 +142,7 @@ class CameraInterface:
             self._placeholder_image(path)
 
         return path
+
 
 class RCloneUploader:
     """Upload files using rclone and remove them locally."""
@@ -283,6 +285,7 @@ class CastlesAndCansGame:
         )
         self.overlay_text.place(relx=0.5, rely=0.5, anchor="center")
         self.overlay.place_forget()
+        self._anim_id = None
 
         # Ensure key events go to the root window
         self.root.focus_set()
@@ -444,23 +447,33 @@ class CastlesAndCansGame:
         self.overlay_image.config(image=photo)
         self.overlay_image.image = photo
         self.overlay_text.config(text=text)
-        self.overlay.place(x=0, y=self.root.winfo_height())
+        self.overlay_text.lift()
+        if self._anim_id:
+            self.root.after_cancel(self._anim_id)
+        self.overlay.place(x=0, y=self.root.winfo_height(), relwidth=1, relheight=1)
+        self._anim_id = None
         self._animate_overlay(-20)
 
     def _animate_overlay(self, step: int):
         """Animate the overlay sliding in or out."""
         y = self.overlay.winfo_y() + step
         if step < 0 and y <= 0:
-            y = 0
+            self.overlay.place(y=0, relwidth=1, relheight=1)
+            self._anim_id = None
+            return
         if step > 0 and y >= self.root.winfo_height():
             self.overlay.place_forget()
+            self._anim_id = None
             return
         self.overlay.place(y=y, relwidth=1, relheight=1)
-        self.root.after(20, self._animate_overlay, step)
+        self._anim_id = self.root.after(20, self._animate_overlay, step)
 
     def hide_overlay(self):
         """Slide the overlay off the screen."""
         if self.overlay.winfo_ismapped():
+            if self._anim_id:
+                self.root.after_cancel(self._anim_id)
+                self._anim_id = None
             self._animate_overlay(20)
 
     def capture_image(self, prefix: str, show: bool = True):
