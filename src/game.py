@@ -50,7 +50,6 @@ class HardwareInterface:
         """Reset the physical targets to match the team's progress."""
         print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
-
 class CastlesAndCansGame:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -110,6 +109,7 @@ class CastlesAndCansGame:
         self.expected_target = {Team.RED: 1, Team.GREEN: 1}
         self.hw.restore_targets(Team.RED, 0)
         self.hw.restore_targets(Team.GREEN, 0)
+
         self.root.after(1000, self.finish_coin_flip)
 
     def finish_coin_flip(self):
@@ -117,6 +117,7 @@ class CastlesAndCansGame:
         self.status_label.config(text=f"{self.current_team.value} starts - hit target {self.expected_target[self.current_team]}")
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.state = GameState.PLAYER_TURN
+
         self.update_progress()
         self.ball_label.config(text="Throw ball at the castle")
 
@@ -124,6 +125,7 @@ class CastlesAndCansGame:
         """Register a target hit. Always output the hardware event.
 
         Progress only advances when the game is in ``PLAYER_TURN`` state and
+
         the correct target for the current team is hit. Other hits merely show a
         message so key presses are visible when testing.
         """
@@ -135,6 +137,7 @@ class CastlesAndCansGame:
             return
 
         if target == self.expected_target[self.current_team]:
+
             self.target_hits[self.current_team] += 1
             self.expected_target[self.current_team] += 1
             self.update_progress()
@@ -170,12 +173,15 @@ class CastlesAndCansGame:
     def launch_ball(self):
         if self.state != GameState.PLAYER_TURN:
             return
+
         self.hw.launch_plunger()
+
         self.ball_in_play = True
         self.state = GameState.BALL_LAUNCHED
         self.ball_label.config(text="Ball launched")
 
     def tunnel_triggered(self):
+
         """Handle the ball entering the tunnel."""
         if self.state not in (
             GameState.AWAITING_TUNNEL,
@@ -198,10 +204,12 @@ class CastlesAndCansGame:
 
     def launch_countdown(self, count: int):
         if count == 0:
+
             self.hw.launch_plunger()
             self.ball_in_play = True
             if self.state != GameState.CHUG:
                 self.state = GameState.BALL_LAUNCHED
+
             self.ball_label.config(text="Ball launched - waiting for return")
         else:
             self.ball_label.config(text=f"Launching in {count}...")
@@ -217,6 +225,7 @@ class CastlesAndCansGame:
         if self.state == GameState.CHUG:
             self.hw.stop_chug(self.current_team)
             self.ball_label.config(text="Ball returned! Stop chugging")
+
             self.ball_in_play = False
             if self.state != GameState.GAME_OVER:
                 self.root.after(2000, self.next_turn)
@@ -226,6 +235,7 @@ class CastlesAndCansGame:
             if self.state != GameState.GAME_OVER:
                 self.root.after(1000, self.next_turn)
 
+
     def next_turn(self):
         if self.current_team is None:
             return
@@ -234,7 +244,9 @@ class CastlesAndCansGame:
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
         self.ball_in_play = False
+
         self.ball_label.config(text="Throw ball at the castle")
+
         self.awaiting_tunnel = False
         self.state = GameState.PLAYER_TURN
 
@@ -271,4 +283,5 @@ class CastlesAndCansGame:
 if __name__ == "__main__":
     root = tk.Tk()
     game = CastlesAndCansGame(root)
+
     root.mainloop()
