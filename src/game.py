@@ -80,17 +80,36 @@ class CameraInterface:
         self.command = None
         if shutil.which("libcamera-still"):
             # ``libcamera-still`` is the default on newer Pi OS releases
-            self.command = ["libcamera-still", "-n", "-t", "1", "-o"]
+            self.command = [
+                "libcamera-still",
+                "-n",
+                "--immediate",
+                "--width",
+                "1280",
+                "--height",
+                "720",
+                "-o",
+            ]
         elif shutil.which("raspistill"):
             # ``raspistill`` for legacy camera stack
-            self.command = ["raspistill", "-n", "-t", "1", "-o"]
+            self.command = [
+                "raspistill",
+                "-n",
+                "-t",
+                "1",
+                "-w",
+                "1280",
+                "-h",
+                "720",
+                "-o",
+            ]
         else:
             print("[Camera] No camera command found. Using placeholder images")
 
     def _placeholder_image(self, path: str):
         """Create a blank placeholder image when the camera is unavailable."""
         if Image:
-            img = Image.new("RGB", (640, 480), color="black")
+            img = Image.new("RGB", (1280, 720), color="black")
             img.save(path)
         else:
             with open(path, "wb") as f:
@@ -161,36 +180,82 @@ class CastlesAndCansGame:
 
     def setup_ui(self):
         self.root.title("Castles & Cans")
-        self.status_label = tk.Label(self.root, text="Press START", font=("Arial", 24))
-        self.status_label.pack(pady=20)
+        self.root.geometry("800x480")
+        self.root.configure(bg="black")
+        self.status_label = tk.Label(
+            self.root,
+            text="Press START",
+            font=("Helvetica", 32, "bold"),
+            fg="yellow",
+            bg="black",
+        )
+        self.status_label.pack(pady=20, fill=tk.X)
 
-        self.start_button = tk.Button(self.root, text="Start / Reset", command=self.start_game)
+        self.start_button = tk.Button(
+            self.root,
+            text="Start / Reset",
+            command=self.start_game,
+            font=("Helvetica", 16),
+            bg="gray20",
+            fg="white",
+        )
         self.start_button.pack(side=tk.LEFT, padx=10)
 
-        self.force_next_button = tk.Button(self.root, text="Force Next Turn", command=self.next_turn)
+        self.force_next_button = tk.Button(
+            self.root,
+            text="Force Next Turn",
+            command=self.next_turn,
+            font=("Helvetica", 16),
+            bg="gray20",
+            fg="white",
+        )
         self.force_next_button.pack(side=tk.LEFT, padx=10)
 
-        self.dispense_red = tk.Button(self.root, text="Dispense Red", command=lambda: self.dispense_beer(Team.RED))
+        self.dispense_red = tk.Button(
+            self.root,
+            text="Dispense Red",
+            command=lambda: self.dispense_beer(Team.RED),
+            font=("Helvetica", 16),
+            bg="red3",
+            fg="white",
+        )
         self.dispense_red.pack(side=tk.LEFT, padx=10)
 
-        self.dispense_green = tk.Button(self.root, text="Dispense Green", command=lambda: self.dispense_beer(Team.GREEN))
+        self.dispense_green = tk.Button(
+            self.root,
+            text="Dispense Green",
+            command=lambda: self.dispense_beer(Team.GREEN),
+            font=("Helvetica", 16),
+            bg="green4",
+            fg="white",
+        )
         self.dispense_green.pack(side=tk.LEFT, padx=10)
 
-        self.progress_frame = tk.Frame(self.root)
+        self.progress_frame = tk.Frame(self.root, bg="black")
         self.progress_labels = []
         for _ in range(5):
-            lbl = tk.Label(self.progress_frame, text="○", font=("Arial", 24))
+            lbl = tk.Label(
+                self.progress_frame,
+                text="○",
+                font=("Helvetica", 28, "bold"),
+                bg="black",
+                fg="white",
+            )
             lbl.pack(side=tk.LEFT, padx=4)
             self.progress_labels.append(lbl)
         self.progress_frame.pack(pady=10)
 
-        self.target_label = tk.Label(self.root, text="", font=("Arial", 18))
+        self.target_label = tk.Label(
+            self.root, text="", font=("Helvetica", 20, "bold"), fg="cyan", bg="black"
+        )
         self.target_label.pack(pady=5)
 
-        self.ball_label = tk.Label(self.root, text="", font=("Arial", 18))
+        self.ball_label = tk.Label(
+            self.root, text="", font=("Helvetica", 20, "bold"), fg="cyan", bg="black"
+        )
         self.ball_label.pack(pady=5)
 
-        self.image_label = tk.Label(self.root)
+        self.image_label = tk.Label(self.root, bg="black")
         self.image_label.pack(pady=5)
 
         # Ensure key events go to the root window
@@ -352,7 +417,7 @@ class CastlesAndCansGame:
                 color = 'red' if self.current_team == Team.RED else 'green'
                 lbl.config(text='●', fg=color)
             else:
-                lbl.config(text='○', fg='black')
+                lbl.config(text='○', fg='white')
         self.target_label.config(text=f"Next target: {self.expected_target[self.current_team]}")
 
     def capture_image(self, prefix: str, show: bool = True):
@@ -362,7 +427,7 @@ class CastlesAndCansGame:
         if Image and ImageTk:
             try:
                 img = Image.open(path)
-                img.thumbnail((320, 240))
+                img.thumbnail((640, 360))
                 photo = ImageTk.PhotoImage(img)
                 if show:
                     self.image_label.config(image=photo)
