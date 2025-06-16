@@ -14,6 +14,10 @@ Ensure Python 3 with Tkinter is installed. Launch the prototype with:
 python3 src/game.py
 ```
 
+The UI requires an X11 display. If no display is available the script will exit
+with an error message. When running over SSH be sure to enable X forwarding or
+attach a screen to the Pi.
+
 The window now features a medieval-style colour scheme with parchment text on a
 dark stone background. Photos captured by the Pi camera slide in from the bottom
 to fill the entire screen with the status text overlaid in the centre. The layout

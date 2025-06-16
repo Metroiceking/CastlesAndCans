@@ -9,6 +9,7 @@ from enum import Enum, auto
 from typing import Optional
 import subprocess
 import shutil
+import sys
 
 try:
     from PIL import Image, ImageTk  # Requires Pillow and ImageTk support
@@ -500,6 +501,10 @@ class CastlesAndCansGame:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        print(f"[Error] Tk initialization failed: {exc}")
+        sys.exit(1)
     game = CastlesAndCansGame(root)
     root.mainloop()
