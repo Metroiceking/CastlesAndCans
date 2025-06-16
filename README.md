@@ -1,0 +1,67 @@
+# Castles & Cans
+
+This repository contains an early prototype of **Castles & Cans**, an interactive castle-themed drinking game powered by a Raspberry Pi.
+
+The game uses a touchscreen user interface and communicates with physical components such as sensors, lights and motors. Two teams (Red and Green) compete by hitting targets and triggering challenges.
+
+At this stage the project includes a simple Python program (`src/game.py`) implementing the basic UI and placeholder hardware actions.
+
+## Running
+
+Ensure Python 3 with Tkinter is installed. Launch the prototype with:
+
+```bash
+python3 src/game.py
+```
+
+This will open a window demonstrating the UI flow: start/reset, coin flip and alternating turns. The window displays which target is currently required along with each team's progress. Targets must be hit in order; hitting the wrong target simply plays a neutral effect. Once the correct target is hit the game waits for the tunnel sensor. A couple of seconds after the tunnel triggers the screen shows **Ready to launch**. Press the launch key to fire the plunger. Chugging only begins once the ball is launched and stops when it is returned.
+
+### Keyboard controls
+
+The prototype uses keyboard keys to mimic hardware buttons:
+
+- **s** – Start or reset the game
+- **n** – Force next turn
+- **r** – Dispense beer for the Red team
+- **g** – Dispense beer for the Green team
+- **1**..**5** – Trigger target sensors (progresses only if the next target in order is hit)
+- **l** – Launch the ball after the tunnel is triggered
+- **b** – Signal that the ball returned
+- **t** – Tunnel sensor triggered (prepares launch)
+
+Team progress is stored separately, and the hardware is instructed to restore
+each side's targets whenever turns change.
+
+A missed shot automatically ends the turn once the ball is returned.
+
+Hardware-specific functions are still implemented as console print statements. Integrate with GPIO libraries on the Raspberry Pi as development continues.
+
+### Camera captures and Google Drive
+
+When a target is hit, the Pi camera snaps a photo that is shown while the game prepares to launch the ball. Another photo is taken a couple of seconds into the chug phase and displayed when the ball returns. These images are automatically uploaded to a Google Drive folder and deleted locally.
+
+To enable uploads, create a service account in Google Cloud and share your desired Drive folder with that account. Save the service account JSON on the Pi and provide its path and the folder ID through environment variables:
+
+```bash
+export GOOGLE_DRIVE_CREDENTIALS=/path/to/service_account.json
+export GOOGLE_DRIVE_FOLDER_ID=your_folder_id
+```
+
+Install the required Python packages on the Pi:
+
+```bash
+pip install Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
+```
+
+The Pillow package must include ImageTk support. On some systems this requires the
+`python3-pil.imagetk` package or similar.
+
+If the environment variables or packages are missing, the prototype skips the upload step.
+
+### Google Drive setup
+
+1. Create a project in the [Google Cloud console](https://console.cloud.google.com/) and enable the **Drive API**.
+2. Create a **service account** and download its JSON key file to the Pi.
+3. In Google Drive, create the folder for uploads and **share** it with the service account's email address.
+4. Set the environment variables `GOOGLE_DRIVE_CREDENTIALS` to the path of the JSON file and `GOOGLE_DRIVE_FOLDER_ID` to the ID of the shared folder.
+5. Run the prototype and check the console for `[Drive] Google Drive uploader initialized`. Errors are printed if the credentials or folder ID are incorrect.
