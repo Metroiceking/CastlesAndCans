@@ -41,7 +41,6 @@ Hardware-specific functions are still implemented as console print statements. I
 When a target is hit, the Pi camera snaps a photo that is shown while the game prepares to launch the ball. Another photo is taken a couple of seconds into the chug phase and displayed when the ball returns. These images are automatically uploaded using **rclone** and then deleted locally.
 
 The script looks for either `libcamera-still` or `raspistill` to capture photos. Install one of these utilities on your Raspberry Pi. If neither command is available the program creates placeholder images instead.
-
 Set the environment variable `RCLONE_REMOTE` to the destination configured in rclone, for example `mydrive:CastlesAndCans`. If the variable is missing or rclone is not installed, uploads are skipped.
 
 Only the Pillow package is required for displaying images:

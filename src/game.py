@@ -62,7 +62,6 @@ class HardwareInterface:
         """Reset the physical targets to match the team's progress."""
         print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
-
 class CameraInterface:
     """Handle capturing images from the Pi camera."""
 
@@ -107,7 +106,6 @@ class CameraInterface:
 
         return path
 
-
 class RCloneUploader:
     """Upload files using rclone and remove them locally."""
 
@@ -138,7 +136,6 @@ class RCloneUploader:
         finally:
             if os.path.exists(filepath):
                 os.remove(filepath)
-
 
 class CastlesAndCansGame:
     def __init__(self, root: tk.Tk):
