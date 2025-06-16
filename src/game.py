@@ -6,11 +6,15 @@ import random
 import datetime
 import tkinter as tk
 from enum import Enum, auto
-from PIL import Image, ImageTk
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+import subprocess
+import shutil
 
+try:
+    from PIL import Image, ImageTk  # Requires Pillow and ImageTk support
+except Exception as exc:  # Pillow may be missing or compiled without tkinter
+    Image = None
+    ImageTk = None
+    print(f"[Init] Pillow ImageTk unavailable: {exc}")
 
 class Team(Enum):
     RED = 'Red'
@@ -76,37 +80,33 @@ class CameraInterface:
             pass
         return path
 
+class RCloneUploader:
+    """Upload files using rclone and remove them locally."""
 
-class GoogleDriveUploader:
-    """Upload files to Google Drive and remove them locally."""
-
-    def __init__(self, creds_path: str = "service_account.json", folder_id: str | None = None):
-        self.folder_id = folder_id
-        if os.path.exists(creds_path) and folder_id:
-            creds = service_account.Credentials.from_service_account_file(
-                creds_path,
-                scopes=["https://www.googleapis.com/auth/drive.file"],
-            )
-            self.service = build("drive", "v3", credentials=creds)
-        else:
-            self.service = None
+    def __init__(self, remote: str | None = None):
+        self.remote = remote
+        self.enabled = False
+        if not remote:
+            print("[RClone] RCLONE_REMOTE not set. Upload disabled")
+            return
+        if shutil.which("rclone") is None:
+            print("[RClone] rclone command not found. Upload disabled")
+            return
+        self.enabled = True
+        print(f"[RClone] Uploader configured for {self.remote}")
 
     def upload(self, filepath: str):
-        if not self.service:
-            print("[Drive] Upload skipped - credentials not configured")
+        if not self.enabled:
+            print("[RClone] Upload skipped - uploader not configured")
             if os.path.exists(filepath):
                 os.remove(filepath)
             return
 
-        file_metadata = {"name": os.path.basename(filepath)}
-        if self.folder_id:
-            file_metadata["parents"] = [self.folder_id]
-        media = MediaFileUpload(filepath, mimetype="image/jpeg")
         try:
-            self.service.files().create(body=file_metadata, media_body=media).execute()
-            print(f"[Drive] Uploaded {filepath}")
+            subprocess.check_call(["rclone", "copy", filepath, self.remote])
+            print(f"[RClone] Uploaded {filepath}")
         except Exception as exc:
-            print(f"[Drive] Failed to upload {filepath}: {exc}")
+            print(f"[RClone] Failed to upload {filepath}: {exc}")
         finally:
             if os.path.exists(filepath):
                 os.remove(filepath)
@@ -122,12 +122,8 @@ class CastlesAndCansGame:
         self.awaiting_tunnel = False
         self.prev_status = ""
         self.camera = CameraInterface()
-        self.drive = GoogleDriveUploader(
-            os.environ.get("GOOGLE_DRIVE_CREDENTIALS", "service_account.json"),
-            os.environ.get("GOOGLE_DRIVE_FOLDER_ID"),
-        )
+        self.drive = RCloneUploader(os.environ.get("RCLONE_REMOTE"))
         self.chug_photo = None
-
         self.setup_ui()
         # Bind all key events so they register regardless of focus
         self.root.bind_all('<Key>', self.handle_key)
@@ -182,7 +178,6 @@ class CastlesAndCansGame:
         self.expected_target = {Team.RED: 1, Team.GREEN: 1}
         self.hw.restore_targets(Team.RED, 0)
         self.hw.restore_targets(Team.GREEN, 0)
-
         self.root.after(1000, self.finish_coin_flip)
 
     def finish_coin_flip(self):
@@ -190,7 +185,6 @@ class CastlesAndCansGame:
         self.status_label.config(text=f"{self.current_team.value} starts - hit target {self.expected_target[self.current_team]}")
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.state = GameState.PLAYER_TURN
-
         self.update_progress()
         self.ball_label.config(text="Throw ball at the castle")
 
@@ -198,7 +192,6 @@ class CastlesAndCansGame:
         """Register a target hit. Always output the hardware event.
 
         Progress only advances when the game is in ``PLAYER_TURN`` state and
-
         the correct target for the current team is hit. Other hits merely show a
         message so key presses are visible when testing.
         """
@@ -235,13 +228,11 @@ class CastlesAndCansGame:
         self.hw.drop_gate()
 
     def start_chug_phase(self):
-
         """Begin the chug phase once the ball launches."""
         self.state = GameState.CHUG
         self.hw.start_chug(self.current_team)
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
         self.ball_label.config(text="Ball launched - chug!")
-
         # Capture a chug photo after a short delay but don't display it yet
         self.root.after(2000, lambda: setattr(self, 'chug_photo', self.capture_image('chug', show=False)))
 
@@ -250,7 +241,6 @@ class CastlesAndCansGame:
         self.next_turn()
 
     def launch_ball(self):
-
         """Fire the plunger when the game is ready."""
         if self.state != GameState.AWAITING_LAUNCH:
             return
@@ -262,12 +252,10 @@ class CastlesAndCansGame:
             self.state = GameState.BALL_LAUNCHED
             self.ball_label.config(text="Ball launched - waiting for return")
             self.status_label.config(text="Ball launched")
-
         # Clear hit photo once the ball is launched
         self.image_label.config(image='')
 
     def tunnel_triggered(self):
-
         """Handle the ball entering the tunnel."""
         if self.state not in (
             GameState.AWAITING_TUNNEL,
@@ -317,7 +305,6 @@ class CastlesAndCansGame:
         if self.current_team is None:
             return
         self.current_team = Team.GREEN if self.current_team == Team.RED else Team.RED
-
         self.status_label.config(text=f"{self.current_team.value} turn - hit target {self.expected_target[self.current_team]}")
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
@@ -342,15 +329,18 @@ class CastlesAndCansGame:
         """Capture an image, optionally display it, then upload to Drive."""
         path = self.camera.capture_image(prefix)
         photo = None
-        try:
-            img = Image.open(path)
-            img.thumbnail((320, 240))
-            photo = ImageTk.PhotoImage(img)
-            if show:
-                self.image_label.config(image=photo)
-                self.image_label.image = photo
-        except Exception as exc:
-            print(f"Failed to load image {path}: {exc}")
+        if Image and ImageTk:
+            try:
+                img = Image.open(path)
+                img.thumbnail((320, 240))
+                photo = ImageTk.PhotoImage(img)
+                if show:
+                    self.image_label.config(image=photo)
+                    self.image_label.image = photo
+            except Exception as exc:
+                print(f"Failed to load image {path}: {exc}")
+        else:
+            print("[Init] Pillow not available - skipping image preview")
         self.drive.upload(path)
         return photo
 
@@ -377,5 +367,4 @@ class CastlesAndCansGame:
 if __name__ == "__main__":
     root = tk.Tk()
     game = CastlesAndCansGame(root)
-
     root.mainloop()

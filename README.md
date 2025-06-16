@@ -36,21 +36,24 @@ A missed shot automatically ends the turn once the ball is returned.
 
 Hardware-specific functions are still implemented as console print statements. Integrate with GPIO libraries on the Raspberry Pi as development continues.
 
-### Camera captures and Google Drive
+### Camera captures and uploads
 
-When a target is hit, the Pi camera snaps a photo that is shown while the game prepares to launch the ball. Another photo is taken a couple of seconds into the chug phase and displayed when the ball returns. These images are automatically uploaded to a Google Drive folder and deleted locally.
+When a target is hit, the Pi camera snaps a photo that is shown while the game prepares to launch the ball. Another photo is taken a couple of seconds into the chug phase and displayed when the ball returns. These images are automatically uploaded using **rclone** and then deleted locally.
 
-To enable uploads, create a service account in Google Cloud and share your desired Drive folder with that account. Save the service account JSON on the Pi and provide its path and the folder ID through environment variables:
+Set the environment variable `RCLONE_REMOTE` to the destination configured in rclone, for example `mydrive:CastlesAndCans`. If the variable is missing or rclone is not installed, uploads are skipped.
 
-```bash
-export GOOGLE_DRIVE_CREDENTIALS=/path/to/service_account.json
-export GOOGLE_DRIVE_FOLDER_ID=your_folder_id
-```
-
-Install the required Python packages on the Pi:
+Only the Pillow package is required for displaying images:
 
 ```bash
-pip install Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
+pip install Pillow
 ```
 
-If these variables or packages are missing, the prototype skips the upload step.
+The Pillow package must include ImageTk support. On some systems this requires the `python3-pil.imagetk` package or similar.
+
+### RClone setup
+
+1. Install rclone on the Pi. You can use `sudo apt install rclone` or follow the instructions on [rclone.org](https://rclone.org/install/).
+2. Run `rclone config` and create a remote for Google Drive (or another provider). Note the remote name.
+3. Create or choose a folder on your remote to store uploads.
+4. Set `RCLONE_REMOTE` to `<remote>:<folder>` (for example `gdrive:CastlesAndCans`).
+5. Run the prototype and check the console for `[RClone] Uploader configured for ...`.
