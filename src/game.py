@@ -6,6 +6,8 @@ import random
 import datetime
 import tkinter as tk
 from enum import Enum, auto
+import subprocess
+import shutil
 
 try:
     from PIL import Image, ImageTk  # Requires Pillow and ImageTk support
@@ -13,11 +15,6 @@ except Exception as exc:  # Pillow may be missing or compiled without tkinter
     Image = None
     ImageTk = None
     print(f"[Init] Pillow ImageTk unavailable: {exc}")
-
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-
 
 class Team(Enum):
     RED = 'Red'
@@ -85,44 +82,33 @@ class CameraInterface:
         return path
 
 
-class GoogleDriveUploader:
-    """Upload files to Google Drive and remove them locally."""
+class RCloneUploader:
+    """Upload files using rclone and remove them locally."""
 
-    def __init__(self, creds_path: str | None = None, folder_id: str | None = None):
-        self.folder_id = folder_id
-        self.service = None
-        if not creds_path or not os.path.exists(creds_path):
-            print(f"[Drive] Missing credentials file: {creds_path}. Upload disabled")
+    def __init__(self, remote: str | None = None):
+        self.remote = remote
+        self.enabled = False
+        if not remote:
+            print("[RClone] RCLONE_REMOTE not set. Upload disabled")
             return
-        if not folder_id:
-            print("[Drive] GOOGLE_DRIVE_FOLDER_ID not set. Upload disabled")
+        if shutil.which("rclone") is None:
+            print("[RClone] rclone command not found. Upload disabled")
             return
-        try:
-            creds = service_account.Credentials.from_service_account_file(
-                creds_path,
-                scopes=["https://www.googleapis.com/auth/drive.file"],
-            )
-            self.service = build("drive", "v3", credentials=creds)
-            print("[Drive] Google Drive uploader initialized")
-        except Exception as exc:
-            print(f"[Drive] Failed to initialize client: {exc}")
+        self.enabled = True
+        print(f"[RClone] Uploader configured for {self.remote}")
 
     def upload(self, filepath: str):
-        if not self.service:
-            print("[Drive] Upload skipped - uploader not configured")
+        if not self.enabled:
+            print("[RClone] Upload skipped - uploader not configured")
             if os.path.exists(filepath):
                 os.remove(filepath)
             return
 
-        file_metadata = {"name": os.path.basename(filepath)}
-        if self.folder_id:
-            file_metadata["parents"] = [self.folder_id]
-        media = MediaFileUpload(filepath, mimetype="image/jpeg")
         try:
-            self.service.files().create(body=file_metadata, media_body=media).execute()
-            print(f"[Drive] Uploaded {filepath}")
+            subprocess.check_call(["rclone", "copy", filepath, self.remote])
+            print(f"[RClone] Uploaded {filepath}")
         except Exception as exc:
-            print(f"[Drive] Failed to upload {filepath}: {exc}")
+            print(f"[RClone] Failed to upload {filepath}: {exc}")
         finally:
             if os.path.exists(filepath):
                 os.remove(filepath)
@@ -139,10 +125,7 @@ class CastlesAndCansGame:
         self.awaiting_tunnel = False
         self.prev_status = ""
         self.camera = CameraInterface()
-        self.drive = GoogleDriveUploader(
-            os.environ.get("GOOGLE_DRIVE_CREDENTIALS", "service_account.json"),
-            os.environ.get("GOOGLE_DRIVE_FOLDER_ID"),
-        )
+        self.drive = RCloneUploader(os.environ.get("RCLONE_REMOTE"))
         self.chug_photo = None
         self.setup_ui()
         # Bind all key events so they register regardless of focus
