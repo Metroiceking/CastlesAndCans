@@ -35,3 +35,22 @@ each side's targets whenever turns change.
 A missed shot automatically ends the turn once the ball is returned.
 
 Hardware-specific functions are still implemented as console print statements. Integrate with GPIO libraries on the Raspberry Pi as development continues.
+
+### Camera captures and Google Drive
+
+When a target is hit, the Pi camera snaps a photo that is shown while the game prepares to launch the ball. Another photo is taken a couple of seconds into the chug phase and displayed when the ball returns. These images are automatically uploaded to a Google Drive folder and deleted locally.
+
+To enable uploads, create a service account in Google Cloud and share your desired Drive folder with that account. Save the service account JSON on the Pi and provide its path and the folder ID through environment variables:
+
+```bash
+export GOOGLE_DRIVE_CREDENTIALS=/path/to/service_account.json
+export GOOGLE_DRIVE_FOLDER_ID=your_folder_id
+```
+
+Install the required Python packages on the Pi:
+
+```bash
+pip install Pillow google-api-python-client google-auth-httplib2 google-auth-oauthlib
+```
+
+If these variables or packages are missing, the prototype skips the upload step.

@@ -1,9 +1,15 @@
 # Game logic and UI for Castles & Cans
 # Placeholder implementation for Raspberry Pi hardware integration
 
+import os
 import random
+import datetime
 import tkinter as tk
 from enum import Enum, auto
+from PIL import Image, ImageTk
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 
 class Team(Enum):
@@ -51,6 +57,60 @@ class HardwareInterface:
         """Reset the physical targets to match the team's progress."""
         print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
+class CameraInterface:
+    """Handle capturing images from the Pi camera."""
+
+    def __init__(self, capture_dir: str = "captures"):
+        self.capture_dir = capture_dir
+        os.makedirs(self.capture_dir, exist_ok=True)
+
+    def capture_image(self, prefix: str) -> str:
+        """Capture an image and return the file path."""
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{prefix}_{timestamp}.jpg"
+        path = os.path.join(self.capture_dir, filename)
+        # Placeholder for actual camera command. Replace with picamera2 or
+        # libcamera-still on the Raspberry Pi.
+        print(f"[HW] CAPTURE_IMAGE {path}")
+        with open(path, "wb") as f:
+            pass
+        return path
+
+
+class GoogleDriveUploader:
+    """Upload files to Google Drive and remove them locally."""
+
+    def __init__(self, creds_path: str = "service_account.json", folder_id: str | None = None):
+        self.folder_id = folder_id
+        if os.path.exists(creds_path) and folder_id:
+            creds = service_account.Credentials.from_service_account_file(
+                creds_path,
+                scopes=["https://www.googleapis.com/auth/drive.file"],
+            )
+            self.service = build("drive", "v3", credentials=creds)
+        else:
+            self.service = None
+
+    def upload(self, filepath: str):
+        if not self.service:
+            print("[Drive] Upload skipped - credentials not configured")
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return
+
+        file_metadata = {"name": os.path.basename(filepath)}
+        if self.folder_id:
+            file_metadata["parents"] = [self.folder_id]
+        media = MediaFileUpload(filepath, mimetype="image/jpeg")
+        try:
+            self.service.files().create(body=file_metadata, media_body=media).execute()
+            print(f"[Drive] Uploaded {filepath}")
+        except Exception as exc:
+            print(f"[Drive] Failed to upload {filepath}: {exc}")
+        finally:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
 class CastlesAndCansGame:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -61,6 +121,13 @@ class CastlesAndCansGame:
         self.expected_target = {Team.RED: 1, Team.GREEN: 1}
         self.awaiting_tunnel = False
         self.prev_status = ""
+        self.camera = CameraInterface()
+        self.drive = GoogleDriveUploader(
+            os.environ.get("GOOGLE_DRIVE_CREDENTIALS", "service_account.json"),
+            os.environ.get("GOOGLE_DRIVE_FOLDER_ID"),
+        )
+        self.chug_photo = None
+
         self.setup_ui()
         # Bind all key events so they register regardless of focus
         self.root.bind_all('<Key>', self.handle_key)
@@ -97,6 +164,9 @@ class CastlesAndCansGame:
         self.ball_label = tk.Label(self.root, text="", font=("Arial", 18))
         self.ball_label.pack(pady=5)
 
+        self.image_label = tk.Label(self.root)
+        self.image_label.pack(pady=5)
+
         # Ensure key events go to the root window
         self.root.focus_set()
 
@@ -105,6 +175,8 @@ class CastlesAndCansGame:
         self.status_label.config(text="Flipping coin...")
         self.ball_label.config(text="")
         self.target_label.config(text="")
+        self.image_label.config(image='')
+        self.chug_photo = None
         self.ball_in_play = False
         self.target_hits = {Team.RED: 0, Team.GREEN: 0}
         self.expected_target = {Team.RED: 1, Team.GREEN: 1}
@@ -131,6 +203,7 @@ class CastlesAndCansGame:
         message so key presses are visible when testing.
         """
         self.hw.hit_target(target)
+        self.capture_image("hit")
 
         if self.state != GameState.PLAYER_TURN:
             # Show feedback even if the hit occurs at the wrong time
@@ -169,6 +242,9 @@ class CastlesAndCansGame:
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
         self.ball_label.config(text="Ball launched - chug!")
 
+        # Capture a chug photo after a short delay but don't display it yet
+        self.root.after(2000, lambda: setattr(self, 'chug_photo', self.capture_image('chug', show=False)))
+
     def end_chug_phase(self):
         self.hw.stop_chug(self.current_team)
         self.next_turn()
@@ -186,6 +262,9 @@ class CastlesAndCansGame:
             self.state = GameState.BALL_LAUNCHED
             self.ball_label.config(text="Ball launched - waiting for return")
             self.status_label.config(text="Ball launched")
+
+        # Clear hit photo once the ball is launched
+        self.image_label.config(image='')
 
     def tunnel_triggered(self):
 
@@ -223,8 +302,9 @@ class CastlesAndCansGame:
         if self.state == GameState.CHUG:
             self.hw.stop_chug(self.current_team)
             self.ball_label.config(text="Ball returned! Stop chugging")
-
             self.ball_in_play = False
+            if self.chug_photo:
+                self.image_label.config(image=self.chug_photo)
             if self.state != GameState.GAME_OVER:
                 self.root.after(2000, self.next_turn)
         elif self.ball_in_play:
@@ -244,6 +324,8 @@ class CastlesAndCansGame:
         self.ball_in_play = False
         self.ball_label.config(text="Throw ball at the castle")
         self.awaiting_tunnel = False
+        self.chug_photo = None
+        self.image_label.config(image='')
         self.state = GameState.PLAYER_TURN
 
     def update_progress(self):
@@ -255,6 +337,22 @@ class CastlesAndCansGame:
             else:
                 lbl.config(text='○', fg='black')
         self.target_label.config(text=f"Next target: {self.expected_target[self.current_team]}")
+
+    def capture_image(self, prefix: str, show: bool = True):
+        """Capture an image, optionally display it, then upload to Drive."""
+        path = self.camera.capture_image(prefix)
+        photo = None
+        try:
+            img = Image.open(path)
+            img.thumbnail((320, 240))
+            photo = ImageTk.PhotoImage(img)
+            if show:
+                self.image_label.config(image=photo)
+                self.image_label.image = photo
+        except Exception as exc:
+            print(f"Failed to load image {path}: {exc}")
+        self.drive.upload(path)
+        return photo
 
     def handle_key(self, event):
         key = event.keysym.lower()
@@ -279,4 +377,5 @@ class CastlesAndCansGame:
 if __name__ == "__main__":
     root = tk.Tk()
     game = CastlesAndCansGame(root)
+
     root.mainloop()
