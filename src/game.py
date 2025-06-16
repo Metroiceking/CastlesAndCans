@@ -17,6 +17,15 @@ except Exception as exc:  # Pillow may be missing or compiled without tkinter
     ImageTk = None
     print(f"[Init] Pillow ImageTk unavailable: {exc}")
 
+# Basic colors and fonts for a castle-style theme
+BG_COLOR = "#352f2b"  # dark stone background
+FG_COLOR = "#f0e6c8"  # parchment text
+BUTTON_BG = "#5b4636"
+TITLE_FONT = ("Times New Roman", 30, "bold")
+LABEL_FONT = ("Times New Roman", 18, "bold")
+BUTTON_FONT = ("Times New Roman", 16, "bold")
+PROGRESS_FONT = ("Times New Roman", 24, "bold")
+
 class Team(Enum):
     RED = 'Red'
     GREEN = 'Green'
@@ -181,81 +190,92 @@ class CastlesAndCansGame:
     def setup_ui(self):
         self.root.title("Castles & Cans")
         self.root.geometry("800x480")
-        self.root.configure(bg="black")
+        self.root.configure(bg=BG_COLOR)
+
         self.status_label = tk.Label(
             self.root,
             text="Press START",
-            font=("Helvetica", 32, "bold"),
-            fg="yellow",
-            bg="black",
+            font=TITLE_FONT,
+            fg=FG_COLOR,
+            bg=BG_COLOR,
         )
-        self.status_label.pack(pady=20, fill=tk.X)
+        self.status_label.pack(pady=10, fill=tk.X)
 
+        button_frame = tk.Frame(self.root, bg=BG_COLOR)
         self.start_button = tk.Button(
-            self.root,
+            button_frame,
             text="Start / Reset",
             command=self.start_game,
-            font=("Helvetica", 16),
-            bg="gray20",
+            font=BUTTON_FONT,
+            bg=BUTTON_BG,
             fg="white",
         )
-        self.start_button.pack(side=tk.LEFT, padx=10)
+        self.start_button.pack(side=tk.LEFT, padx=5)
 
         self.force_next_button = tk.Button(
-            self.root,
+            button_frame,
             text="Force Next Turn",
             command=self.next_turn,
-            font=("Helvetica", 16),
-            bg="gray20",
+            font=BUTTON_FONT,
+            bg=BUTTON_BG,
             fg="white",
         )
-        self.force_next_button.pack(side=tk.LEFT, padx=10)
+        self.force_next_button.pack(side=tk.LEFT, padx=5)
 
         self.dispense_red = tk.Button(
-            self.root,
+            button_frame,
             text="Dispense Red",
             command=lambda: self.dispense_beer(Team.RED),
-            font=("Helvetica", 16),
-            bg="red3",
+            font=BUTTON_FONT,
+            bg="firebrick4",
             fg="white",
         )
-        self.dispense_red.pack(side=tk.LEFT, padx=10)
+        self.dispense_red.pack(side=tk.LEFT, padx=5)
 
         self.dispense_green = tk.Button(
-            self.root,
+            button_frame,
             text="Dispense Green",
             command=lambda: self.dispense_beer(Team.GREEN),
-            font=("Helvetica", 16),
-            bg="green4",
+            font=BUTTON_FONT,
+            bg="dark green",
             fg="white",
         )
-        self.dispense_green.pack(side=tk.LEFT, padx=10)
+        self.dispense_green.pack(side=tk.LEFT, padx=5)
+        button_frame.pack(pady=10)
 
-        self.progress_frame = tk.Frame(self.root, bg="black")
+        self.progress_frame = tk.Frame(self.root, bg=BG_COLOR)
         self.progress_labels = []
         for _ in range(5):
             lbl = tk.Label(
                 self.progress_frame,
                 text="○",
-                font=("Helvetica", 28, "bold"),
-                bg="black",
-                fg="white",
+                font=PROGRESS_FONT,
+                bg=BG_COLOR,
+                fg=FG_COLOR,
             )
             lbl.pack(side=tk.LEFT, padx=4)
             self.progress_labels.append(lbl)
-        self.progress_frame.pack(pady=10)
+        self.progress_frame.pack(pady=5)
 
         self.target_label = tk.Label(
-            self.root, text="", font=("Helvetica", 20, "bold"), fg="cyan", bg="black"
+            self.root,
+            text="",
+            font=LABEL_FONT,
+            fg=FG_COLOR,
+            bg=BG_COLOR,
         )
         self.target_label.pack(pady=5)
 
         self.ball_label = tk.Label(
-            self.root, text="", font=("Helvetica", 20, "bold"), fg="cyan", bg="black"
+            self.root,
+            text="",
+            font=LABEL_FONT,
+            fg=FG_COLOR,
+            bg=BG_COLOR,
         )
         self.ball_label.pack(pady=5)
 
-        self.image_label = tk.Label(self.root, bg="black")
+        self.image_label = tk.Label(self.root, bg=BG_COLOR)
         self.image_label.pack(pady=5)
 
         # Ensure key events go to the root window
@@ -417,7 +437,7 @@ class CastlesAndCansGame:
                 color = 'red' if self.current_team == Team.RED else 'green'
                 lbl.config(text='●', fg=color)
             else:
-                lbl.config(text='○', fg='white')
+                lbl.config(text='○', fg=FG_COLOR)
         self.target_label.config(text=f"Next target: {self.expected_target[self.current_team]}")
 
     def capture_image(self, prefix: str, show: bool = True):
@@ -427,7 +447,7 @@ class CastlesAndCansGame:
         if Image and ImageTk:
             try:
                 img = Image.open(path)
-                img.thumbnail((640, 360))
+                img.thumbnail((720, 405))
                 photo = ImageTk.PhotoImage(img)
                 if show:
                     self.image_label.config(image=photo)
