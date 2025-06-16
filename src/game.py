@@ -15,8 +15,9 @@ class GameState(Enum):
     WAITING_START = auto()
     COIN_FLIP = auto()
     PLAYER_TURN = auto()
-    BALL_LAUNCHED = auto()
     AWAITING_TUNNEL = auto()
+    AWAITING_LAUNCH = auto()
+    BALL_LAUNCHED = auto()
     CHUG = auto()
     GAME_OVER = auto()
 
@@ -134,25 +135,25 @@ class CastlesAndCansGame:
         if self.state != GameState.PLAYER_TURN:
             # Show feedback even if the hit occurs at the wrong time
             self.status_label.config(text=f"Target {target} hit (not your turn)")
-            return
-
-        if target == self.expected_target[self.current_team]:
-
-            self.target_hits[self.current_team] += 1
-            self.expected_target[self.current_team] += 1
-            self.update_progress()
-            if self.target_hits[self.current_team] >= 5:
-                self.win_game()
-                return
-            self.status_label.config(text=f"Target {target} hit! Await tunnel")
-            self.state = GameState.AWAITING_TUNNEL
-            self.awaiting_tunnel = True
+        """Begin the chug phase once the ball launches."""
+        self.ball_label.config(text="Ball launched - chug!")
+        """Fire the plunger when the game is ready."""
+        if self.state != GameState.AWAITING_LAUNCH:
+        if self.awaiting_tunnel:
+            self.start_chug_phase()
         else:
-            print("[HW] NEUTRAL_SOUND")
-            self.status_label.config(text=f"Target {target} hit out of order - await tunnel")
-            self.awaiting_tunnel = False
-            self.state = GameState.AWAITING_TUNNEL
+            self.state = GameState.BALL_LAUNCHED
+            self.ball_label.config(text="Ball launched - waiting for return")
+            self.status_label.config(text="Ball launched")
 
+        self.state = GameState.AWAITING_LAUNCH
+            self.status_label.config(text=f"{self.current_team.value} target cleared! Preparing launch")
+            self.status_label.config(text="Ball entered tunnel")
+        self.root.after(2000, self.ready_to_launch)
+    def ready_to_launch(self):
+        """Display a prompt that the plunger may be fired."""
+        if self.state == GameState.AWAITING_LAUNCH:
+            self.status_label.config(text="Ready to launch - press L")
     def win_game(self):
         """Handle a victory for the current team."""
         self.state = GameState.GAME_OVER
@@ -239,7 +240,7 @@ class CastlesAndCansGame:
     def next_turn(self):
         if self.current_team is None:
             return
-        self.current_team = Team.GREEN if self.current_team == Team.RED else Team.RED
+        elif key == 'l':
         self.status_label.config(text=f"{self.current_team.value} turn - hit target {self.expected_target[self.current_team]}")
         self.hw.restore_targets(self.current_team, self.target_hits[self.current_team])
         self.update_progress()
