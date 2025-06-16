@@ -277,7 +277,7 @@ class CastlesAndCansGame:
             text="",
             font=TITLE_FONT,
             fg=FG_COLOR,
-            bg="",
+            bg=BG_COLOR,
         )
         self.overlay_text.place(relx=0.5, rely=0.5, anchor="center")
         self.overlay.place_forget()
