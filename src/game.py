@@ -11,6 +11,15 @@ import subprocess
 import shutil
 import sys
 import threading
+import time
+
+try:
+    import RPi.GPIO as GPIO
+    GPIO.setmode(GPIO.BCM)
+    GPIO_AVAILABLE = True
+except Exception as exc:
+    GPIO_AVAILABLE = False
+    print(f"[GPIO] Hardware GPIO unavailable: {exc}")
 
 try:
     from PIL import Image, ImageTk  # Requires Pillow and ImageTk support
@@ -27,6 +36,40 @@ TITLE_FONT = ("Times New Roman", 30, "bold")
 LABEL_FONT = ("Times New Roman", 18, "bold")
 BUTTON_FONT = ("Times New Roman", 16, "bold")
 PROGRESS_FONT = ("Times New Roman", 24, "bold")
+
+# ---------------- GPIO PIN ASSIGNMENTS ----------------
+# BCM numbering is used throughout
+RELAY_FAN = 17
+RELAY_RED_DISPENSE = 5
+RELAY_GREEN_DISPENSE = 6
+RELAY_EXPANSION_1 = 13
+RELAY_EXPANSION_2 = 19
+RELAY_EXPANSION_3 = 26
+
+NEOPIXEL_PIN = 18
+
+BUTTON_START = 23
+BUTTON_RESET = 24
+BUTTON_FORCE_TURN = 25
+BUTTON_RED_DISPENSE = 20
+BUTTON_GREEN_DISPENSE = 21
+
+IR_BALL_RETURN = 14
+IR_TUNNEL_ENTRY = 15
+
+MCP3008_CLK = 11
+MCP3008_MISO = 9
+MCP3008_MOSI = 10
+MCP3008_CS = 8
+
+SERVO_1 = 12
+SERVO_2 = 16
+SERVO_3 = 4
+SERVO_4 = 3
+SERVO_5 = 2
+SERVO_6 = 27
+SERVO_7 = 22
+SERVO_8 = 7
 
 class Team(Enum):
     RED = 'Red'
@@ -45,7 +88,54 @@ class GameState(Enum):
 
 
 class HardwareInterface:
-    """Placeholder methods for hardware actions."""
+    """Basic GPIO control for the Castles & Cans hardware."""
+
+    def __init__(self):
+        self.available = GPIO_AVAILABLE
+        if self.available:
+            outputs = [
+                RELAY_FAN,
+                RELAY_RED_DISPENSE,
+                RELAY_GREEN_DISPENSE,
+                RELAY_EXPANSION_1,
+                RELAY_EXPANSION_2,
+                RELAY_EXPANSION_3,
+            ]
+            for pin in outputs:
+                GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
+
+            for pin in [
+                BUTTON_START,
+                BUTTON_RESET,
+                BUTTON_FORCE_TURN,
+                BUTTON_RED_DISPENSE,
+                BUTTON_GREEN_DISPENSE,
+            ]:
+                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+            for pin in [IR_BALL_RETURN, IR_TUNNEL_ENTRY]:
+                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+            for pin in [
+                SERVO_1,
+                SERVO_2,
+                SERVO_3,
+                SERVO_4,
+                SERVO_5,
+                SERVO_6,
+                SERVO_7,
+                SERVO_8,
+            ]:
+                GPIO.setup(pin, GPIO.OUT)
+        else:
+            print("[GPIO] Running in mock mode")
+
+    def _pulse(self, pin: int, duration: float = 0.5):
+        if self.available:
+            GPIO.output(pin, GPIO.HIGH)
+            time.sleep(duration)
+            GPIO.output(pin, GPIO.LOW)
+        print(f"[GPIO] Pulse {pin} for {duration}s")
 
     def start_chug(self, team: Team):
         print(f"[HW] START_CHUG for {team.value}")
@@ -60,17 +150,19 @@ class HardwareInterface:
         print("[HW] DROP_GATE")
 
     def dispense(self, team: Team):
-        print(f"[HW] DISPENSE_{team.value}")
+        pin = RELAY_RED_DISPENSE if team == Team.RED else RELAY_GREEN_DISPENSE
+        self._pulse(pin, 1)
 
     def activate_tunnel(self, tunnel: int):
         print(f"[HW] ACTIVATE_TUNNEL_{tunnel}")
 
     def launch_plunger(self):
         """Fire the plunger to launch the ball."""
+        self._pulse(RELAY_EXPANSION_1, 0.2)
         print("[HW] LAUNCH_PLUNGER")
 
     def restore_targets(self, team: Team, hits: int):
-        """Reset the physical targets to match the team's progress."""
+        """Reset physical targets to the given hit count."""
         print(f"[HW] RESTORE_TARGETS for {team.value} at hit count {hits}")
 
 

@@ -45,7 +45,10 @@ each side's targets whenever turns change.
 
 A missed shot automatically ends the turn once the ball is returned.
 
-Hardware-specific functions are still implemented as console print statements. Integrate with GPIO libraries on the Raspberry Pi as development continues.
+Basic GPIO support is now included using BCM pin numbering. When the script
+detects the RPi.GPIO library it configures each pin as described below;
+otherwise the hardware actions are simply printed for testing on other
+systems.
 
 ### Camera captures and uploads
 
@@ -70,3 +73,37 @@ The Pillow package must include ImageTk support. On some systems this requires t
 3. Create or choose a folder on your remote to store uploads.
 4. Set `RCLONE_REMOTE` to `<remote>:<folder>` (for example `gdrive:CastlesAndCans`).
 5. Run the prototype and check the console for `[RClone] Uploader configured for ...`.
+
+### GPIO Pin Assignments
+
+The table below lists the BCM GPIO pins used by the project. The Python script
+initialises these pins automatically when RPi.GPIO is available.
+
+| Component                | BCM Pin | Header Pin |
+|--------------------------|---------|------------|
+| RELAY_FAN                | 17      | 11         |
+| RELAY_RED_DISPENSE       | 5       | 29         |
+| RELAY_GREEN_DISPENSE     | 6       | 31         |
+| RELAY_EXPANSION_1        | 13      | 33         |
+| RELAY_EXPANSION_2        | 19      | 35         |
+| RELAY_EXPANSION_3        | 26      | 37         |
+| NEOPIXEL_PIN             | 18      | 12         |
+| BUTTON_START             | 23      | 16         |
+| BUTTON_RESET             | 24      | 18         |
+| BUTTON_FORCE_TURN        | 25      | 22         |
+| BUTTON_RED_DISPENSE      | 20      | 38         |
+| BUTTON_GREEN_DISPENSE    | 21      | 40         |
+| IR_BALL_RETURN           | 14      | 8          |
+| IR_TUNNEL_ENTRY          | 15      | 10         |
+| MCP3008_CLK              | 11      | 23         |
+| MCP3008_MISO             | 9       | 21         |
+| MCP3008_MOSI             | 10      | 19         |
+| MCP3008_CS               | 8       | 24         |
+| SERVO_1                  | 12      | 32         |
+| SERVO_2                  | 16      | 36         |
+| SERVO_3                  | 4       | 7          |
+| SERVO_4                  | 3       | 5          |
+| SERVO_5                  | 2       | 3          |
+| SERVO_6                  | 27      | 13         |
+| SERVO_7                  | 22      | 15         |
+| SERVO_8                  | 7       | 26         |
