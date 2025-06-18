@@ -25,7 +25,20 @@ fits the 800×480 Pi touchscreen so previews no longer spill off the edges. The
 photo overlay now animates smoothly with centred text, stays visible for three seconds
 and hides automatically.
 
-This will open a window demonstrating the UI flow: start/reset, coin flip and alternating turns. The window displays which target is currently required along with each team's progress. Targets must be hit in order; hitting the wrong target simply plays a neutral effect. Once the correct target is hit the game waits for the tunnel sensor. A couple of seconds after the tunnel triggers the screen shows **Ready to launch**. Press the launch key to fire the plunger. Chugging only begins once the ball is launched and stops when it is returned.
+The game logic lives in `src/game.py`.  It drives the user interface and
+simulated hardware while tracking each team's progress.  The program cycles
+through a number of **states**:
+
+* `WAITING_START` – initial idle state
+* `COIN_FLIP` – choose the starting team
+* `PLAYER_TURN` – wait for the team to hit its required target
+* `AWAITING_TUNNEL` – target hit, waiting for the ball to enter the tunnel
+* `AWAITING_LAUNCH` – tunnel triggered, countdown before launch
+* `BALL_LAUNCHED` – ball launched but no chugging
+* `CHUG` – active chug phase after a successful hit
+* `GAME_OVER` – all targets complete
+
+This will open a window demonstrating the UI flow: start/reset, coin flip and alternating turns. The window displays which randomly-chosen target is required along with each team's progress. Each team must complete all seven targets once. Hitting the wrong target simply plays a neutral effect. Once the proper target is cleared the game waits for the tunnel sensor. A couple of seconds after the tunnel triggers the screen shows **Ready to launch**. Press the launch key to fire the plunger. Chugging only begins once the ball is launched and stops when it is returned.
 
 ### Keyboard controls
 
@@ -33,19 +46,32 @@ The prototype uses keyboard keys to mimic hardware buttons:
 
 - **s** – Start or reset the game
 - **n** – Force next turn
-- **r** – Dispense beer for the Red team
-- **g** – Dispense beer for the Green team
-- **1**..**5** – Trigger target sensors (progresses only if the next target in order is hit)
+- **r** – Dispense beer for the Red team (Servo 1 counterclockwise, opens the Red door)
+- **g** – Dispense beer for the Green team (Servo 2 clockwise, opens the Green door)
+- **1**..**7** – Trigger target sensors (registers a hit only when it matches the current team's assigned target)
+- **y** – Simulate the IR sensor completing Target 1
 - **l** – Launch the ball after the tunnel is triggered
 - **b** – Signal that the ball returned
 - **t** – Tunnel sensor triggered (prepares launch)
+- **f** – Blow the fan for five seconds to clear the tube
+
+Each team has its own beer door on the castle. The Red door is driven by **Servo 1** and the Green door by **Servo 2**. Pressing the matching dispense button or key opens that team's door for three seconds before closing it again.
+
+When running on a Raspberry Pi with GPIO enabled, the IR sensors connected to
+**IR_TUNNEL_ENTRY** (BCM 15) and **IR_BALL_RETURN** (BCM 14) automatically
+trigger the same actions as the **t** and **b** keys.
+
+Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by spinning **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
 
 Team progress is stored separately, and the hardware is instructed to restore
 each side's targets whenever turns change.
 
 A missed shot automatically ends the turn once the ball is returned.
 
-Hardware-specific functions are still implemented as console print statements. Integrate with GPIO libraries on the Raspberry Pi as development continues.
+Basic GPIO support is now included using BCM pin numbering. When the script
+detects the RPi.GPIO library it configures each pin as described below;
+otherwise the hardware actions are simply printed for testing on other
+systems.
 
 ### Camera captures and uploads
 
@@ -70,3 +96,73 @@ The Pillow package must include ImageTk support. On some systems this requires t
 3. Create or choose a folder on your remote to store uploads.
 4. Set `RCLONE_REMOTE` to `<remote>:<folder>` (for example `gdrive:CastlesAndCans`).
 5. Run the prototype and check the console for `[RClone] Uploader configured for ...`.
+
+### Pressure sensors
+
+Four thin-film force sensors attach to the MCP3008 ADC on channels 0–3.  The
+game polls these inputs in the background and logs a hit whenever the reading
+exceeds a sensitivity threshold.  Hits are counted per channel for future
+expansion.
+
+Target 1 is a small watchtower. Hitting the front pressure sensor (channel 0)
+rotates **Servo 3** 40° counterclockwise to reveal an infrared beam inside the
+tower. When that beam (``IR_TARGET_1``) is broken, the target is marked
+complete and the servo returns to its starting position.
+
+Adjust `PRESSURE_SENSITIVITY` in `src/game.py` if the sensors are too sensitive
+or not sensitive enough.
+
+### Hardware actions
+
+`HardwareInterface` in `src/game.py` abstracts every output the real game will
+control.  When running on a desktop these methods simply print messages so the
+logic can be tested without wiring anything up.  The key actions are:
+
+| Method | Purpose |
+|--------|---------|
+| `blow_fan(duration)` | Pulse the fan relay to clear the ball return tube |
+| `start_chug(team)` and `stop_chug(team)` | Start or stop the chug phase |
+| `hit_target(n)` | Flash lights or play a sound for target `n` |
+| `drop_gate()` | Release the castle gate on victory |
+| `dispense(team)` | Open the team's beer door (Servo 1 for Red, Servo 2 for Green) |
+| `activate_tunnel(n)` | Indicate a ball has entered tunnel `n` |
+| `launch_plunger()` | Fire the plunger to launch the ball |
+| `restore_targets(team, hits)` | Reset physical targets to a team's progress |
+
+These helper methods allow the software to run headless or on different
+hardware by adjusting only the implementation in one place.
+
+### GPIO Pin Assignments
+
+The table below lists the BCM GPIO pins used by the project. The Python script
+initialises these pins automatically when RPi.GPIO is available.
+
+| Component                | BCM Pin | Header Pin |
+|--------------------------|---------|------------|
+| RELAY_FAN                | 17      | 11         |
+| RELAY_RED_DISPENSE       | 5       | 29         |
+| RELAY_GREEN_DISPENSE     | 6       | 31         |
+| RELAY_EXPANSION_1        | 13      | 33         |
+| RELAY_EXPANSION_2        | 19      | 35         |
+| RELAY_EXPANSION_3        | 26      | 37         |
+| NEOPIXEL_PIN             | 18      | 12         |
+| BUTTON_START             | 23      | 16         |
+| BUTTON_RESET             | 24      | 18         |
+| BUTTON_FORCE_TURN        | 25      | 22         |
+| BUTTON_RED_DISPENSE      | 20      | 38         |
+| BUTTON_GREEN_DISPENSE    | 21      | 40         |
+| IR_BALL_RETURN           | 14      | 8          |
+| IR_TUNNEL_ENTRY          | 15      | 10         |
+| IR_TARGET_1              | 0       | 27         |
+| MCP3008_CLK              | 11      | 23         |
+| MCP3008_MISO             | 9       | 21         |
+| MCP3008_MOSI             | 10      | 19         |
+| MCP3008_CS               | 8       | 24         |
+| SERVO_1                  | 12      | 32         |
+| SERVO_2                  | 16      | 36         |
+| SERVO_3                  | 4       | 7          |
+| SERVO_4                  | 3       | 5          |
+| SERVO_5                  | 2       | 3          |
+| SERVO_6                  | 27      | 13         |
+| SERVO_7                  | 22      | 15         |
+| SERVO_8                  | 7       | 26         |
