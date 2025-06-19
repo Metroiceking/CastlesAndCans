@@ -74,6 +74,9 @@ running on a Pi with ``RPi.GPIO`` installed.
 
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by spinning **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
 
+Servo angles are now recognised from **0–360°** (values wrap around), so you may rotate a servo multiple times in either direction. Continuous‑rotation servos can be spun with the new `spin` command described below.
+
+
 Servo positions are saved to `servo_state.json` whenever they move. On startup
 and whenever a new game begins, the program checks this file and only moves each
 servo back to its default 90° position if it wasn't already there. This helps
@@ -96,7 +99,8 @@ manually trigger sensors or move servos. Commands are processed in the
 background so the UI remains responsive. Useful commands include:
 
 ```
-servo <n> <angle>     # rotate servo number n to the given angle
+servo <n> <angle>     # rotate servo number n to the given 0-360° angle
+spin <n> <cw|ccw> [duration]  # continuously spin servo n
 watchtower_pressure   # simulate the watchtower pressure sensor
 watchtower_ir         # simulate the watchtower IR detector
 hit <n>               # trigger target n

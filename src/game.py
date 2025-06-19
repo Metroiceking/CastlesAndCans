@@ -221,12 +221,11 @@ class HardwareInterface:
             print(f"[Servo] Failed to save state: {exc}")
 
     def set_servo_angle(self, pin: int, angle: float):
-        """Move servo to ``angle`` and record the position."""
+        """Move servo to ``angle`` within a 0–360° range and record the position."""
 
         def worker():
-            # Clamp angles to a typical 0-180 degree range
-            clamped = max(0, min(180, angle))
-            duty = self._angle_to_duty(clamped)
+            ang = angle % 360
+            duty = self._angle_to_duty(ang)
 
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
@@ -234,10 +233,11 @@ class HardwareInterface:
                 time.sleep(0.5)
                 pwm.stop()
             num = self.servo_numbers.get(pin, pin)
-            print(f"[GPIO] Servo {num} (pin {pin}) -> {clamped}°")
+
+            print(f"[GPIO] Servo {num} (pin {pin}) -> {ang}°")
 
         threading.Thread(target=worker, daemon=True).start()
-        self.servo_state[pin] = clamped
+        self.servo_state[pin] = ang
 
         self._save_servo_state()
 
@@ -249,18 +249,18 @@ class HardwareInterface:
 
     @staticmethod
     def _angle_to_duty(angle: float) -> float:
-        """Convert a servo angle in degrees to a PWM duty cycle."""
-        return 2.5 + (angle / 18.0)
+        """Convert a 0–360° angle to a PWM duty cycle (approximate)."""
+        ang = angle % 360
+        return 2.5 + (ang / 36.0)
 
     def rotate_servo(self, pin: int, angle: float, hold: float = 0, return_angle: float = 90):
         """Rotate a servo asynchronously and return it to ``return_angle``."""
 
         def worker():
-            start = max(0, min(180, angle))
-            end = max(0, min(180, return_angle))
+            start = angle % 360
+            end = return_angle % 360
             duty_start = self._angle_to_duty(start)
             duty_return = self._angle_to_duty(end)
-
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
                 pwm.start(duty_start)
@@ -277,8 +277,28 @@ class HardwareInterface:
 
         threading.Thread(target=worker, daemon=True).start()
         self.servo_state[pin] = end
-
         self._save_servo_state()
+
+    def spin_servo(self, pin: int, clockwise: bool = True, speed: float = 1.0, duration: Optional[float] = None):
+        """Spin a continuous-rotation servo. Stops automatically after ``duration`` seconds if provided."""
+
+        def worker():
+            duty = 7.5 + (2.5 * speed if clockwise else -2.5 * speed)
+            pwm = None
+            if self.available:
+                pwm = GPIO.PWM(pin, 50)
+                pwm.start(duty)
+            num = self.servo_numbers.get(pin, pin)
+            print(f"[GPIO] Servo {num} (pin {pin}) spin {'CW' if clockwise else 'CCW'}" + (f" for {duration}s" if duration else ""))
+            if duration:
+                time.sleep(duration)
+                if self.available and pwm:
+                    pwm.stop()
+        threading.Thread(target=worker, daemon=True).start()
+
+    def stop_servo(self, pin: int):
+        """Stop a previously spun continuous servo."""
+        self.set_servo_angle(pin, 90)
 
     def _pulse(self, pin: int, duration: float = 0.5):
         """Pulse a GPIO output without blocking the main thread."""
@@ -1065,6 +1085,22 @@ class CastlesAndCansGame:
                 print(f"[Cmd] Unknown servo {num}")
                 return
             self.hw.set_servo_angle(pin, angle)
+
+        elif action == "spin" and len(parts) >= 3:
+            try:
+                num = int(parts[1])
+            except ValueError:
+                print("[Cmd] Usage: spin <servo> <cw|ccw> [duration]")
+                return
+            direction = parts[2].lower()
+            dur = float(parts[3]) if len(parts) >= 4 else None
+            pin = self.servo_map.get(num)
+            if not pin:
+                print(f"[Cmd] Unknown servo {num}")
+                return
+            cw = direction != 'ccw'
+            self.hw.spin_servo(pin, clockwise=cw, duration=dur)
+
         elif action == "hit" and len(parts) >= 2:
             try:
                 target = int(parts[1])
