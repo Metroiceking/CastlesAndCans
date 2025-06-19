@@ -144,6 +144,7 @@ class HardwareInterface:
         ]
         # Map BCM pins back to servo numbers for clearer logs
         self.servo_numbers = {pin: i + 1 for i, pin in enumerate(self.servo_pins)}
+
         if self.available:
             outputs = [
                 RELAY_FAN,
@@ -226,6 +227,7 @@ class HardwareInterface:
             # Clamp angles to a typical 0-180 degree range
             clamped = max(0, min(180, angle))
             duty = self._angle_to_duty(clamped)
+
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
                 pwm.start(duty)
@@ -236,6 +238,7 @@ class HardwareInterface:
 
         threading.Thread(target=worker, daemon=True).start()
         self.servo_state[pin] = clamped
+
         self._save_servo_state()
 
     def reset_servos(self):
@@ -257,6 +260,7 @@ class HardwareInterface:
             end = max(0, min(180, return_angle))
             duty_start = self._angle_to_duty(start)
             duty_return = self._angle_to_duty(end)
+
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
                 pwm.start(duty_start)
@@ -273,6 +277,7 @@ class HardwareInterface:
 
         threading.Thread(target=worker, daemon=True).start()
         self.servo_state[pin] = end
+
         self._save_servo_state()
 
     def _pulse(self, pin: int, duration: float = 0.5):
@@ -507,6 +512,7 @@ class CastlesAndCansGame:
                     bouncetime=200,
                 )
                 print(f"[GPIO] Event detect added for tunnel on pin {IR_TUNNEL_ENTRY}")
+
                 GPIO.add_event_detect(
                     IR_BALL_RETURN,
                     GPIO.RISING,
@@ -521,6 +527,7 @@ class CastlesAndCansGame:
                     bouncetime=200,
                 )
                 print(f"[GPIO] Event detect added for target IR on pin {IR_TARGET_1}")
+
                 GPIO.add_event_detect(
                     BUTTON_START,
                     GPIO.RISING,
@@ -529,6 +536,7 @@ class CastlesAndCansGame:
                 )
                 print(f"[GPIO] Event detect added for start on pin {BUTTON_START}")
                 GPIO.add_event_detect(
+
                     BUTTON_FORCE_TURN,
                     GPIO.RISING,
                     callback=self._gpio_force,
@@ -542,6 +550,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 print(f"[GPIO] Event detect added for red dispense on pin {BUTTON_RED_DISPENSE}")
+
                 GPIO.add_event_detect(
                     BUTTON_GREEN_DISPENSE,
                     GPIO.RISING,
@@ -549,6 +558,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 print(f"[GPIO] Event detect added for green dispense on pin {BUTTON_GREEN_DISPENSE}")
+
             except Exception as exc:
                 print(f"[GPIO] Failed to add event detection: {exc}")
 
@@ -960,6 +970,7 @@ class CastlesAndCansGame:
 
     def _gpio_dispense_green(self, channel):
         print(f"[GPIO] Green dispense button pressed on pin {channel}")
+
         self.root.after(0, lambda: self.dispense_beer(Team.GREEN))
 
     def _poll_pressure_sensors(self):

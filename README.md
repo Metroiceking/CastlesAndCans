@@ -206,3 +206,4 @@ initialises these pins automatically when RPi.GPIO is available.
 | SERVO_6                  | 27      | 13         | (unassigned) |
 | SERVO_7                  | 22      | 15         | (unassigned) |
 | SERVO_8                  | 7       | 26         | (unassigned) |
+
