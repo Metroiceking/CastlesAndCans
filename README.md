@@ -129,6 +129,7 @@ logic can be tested without wiring anything up.  It also includes helper
 functions for playing sounds and driving LEDs so the high-level logic stays the
 same once real hardware is connected. The key actions are:
 
+
 | Method | Purpose |
 |--------|---------|
 | `blow_fan(duration)` | Pulse the fan relay to clear the ball return tube |
