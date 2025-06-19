@@ -12,10 +12,12 @@ import shutil
 import sys
 import threading
 import time
+import json
 
 try:
     import RPi.GPIO as GPIO
     GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
     GPIO_AVAILABLE = True
 except Exception as exc:
     GPIO_AVAILABLE = False
@@ -102,13 +104,44 @@ class GameState(Enum):
     GAME_OVER = auto()
 
 
+class SoundEffect(Enum):
+    """Logical names for sound effects used throughout the game."""
+    TARGET_HIT = auto()
+    NEUTRAL_HIT = auto()
+    CHUG_START = auto()
+    CHUG_STOP = auto()
+    GATE_BREACH = auto()
+    VICTORY = auto()
+    DISPENSE = auto()
+
+
+class LedColor(Enum):
+    """Placeholder LED colours."""
+    RED = 'red'
+    GREEN = 'green'
+    OFF = 'off'
+
+
 class HardwareInterface:
     """Basic GPIO control for the Castles & Cans hardware."""
+
+    SERVO_STATE_FILE = "servo_state.json"
+    START_ANGLE = 90
 
     def __init__(self, pressure_sensitivity: int = PRESSURE_SENSITIVITY):
         self.available = GPIO_AVAILABLE
         self.spi_available = SPI_AVAILABLE
         self.pressure_sensitivity = pressure_sensitivity
+        self.servo_pins = [
+            SERVO_1,
+            SERVO_2,
+            SERVO_3,
+            SERVO_4,
+            SERVO_5,
+            SERVO_6,
+            SERVO_7,
+            SERVO_8,
+        ]
         if self.available:
             outputs = [
                 RELAY_FAN,
@@ -159,6 +192,50 @@ class HardwareInterface:
         else:
             print("[SPI] Using mock ADC readings")
 
+        self._load_servo_state()
+        self.reset_servos()
+
+    def _load_servo_state(self):
+        """Load last known servo angles from disk."""
+        self.servo_state = {pin: self.START_ANGLE for pin in self.servo_pins}
+        if os.path.exists(self.SERVO_STATE_FILE):
+            try:
+                with open(self.SERVO_STATE_FILE, "r") as fh:
+                    data = json.load(fh)
+                for pin, angle in data.items():
+                    self.servo_state[int(pin)] = angle
+            except Exception as exc:
+                print(f"[Servo] Failed to load state: {exc}")
+
+    def _save_servo_state(self):
+        try:
+            with open(self.SERVO_STATE_FILE, "w") as fh:
+                json.dump(self.servo_state, fh)
+        except Exception as exc:
+            print(f"[Servo] Failed to save state: {exc}")
+
+    def set_servo_angle(self, pin: int, angle: float):
+        """Move servo to ``angle`` and record the position."""
+
+        def worker():
+            duty = self._angle_to_duty(angle)
+            if self.available:
+                pwm = GPIO.PWM(pin, 50)
+                pwm.start(duty)
+                time.sleep(0.5)
+                pwm.stop()
+            print(f"[GPIO] Servo {pin} -> {angle}°")
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.servo_state[pin] = angle
+        self._save_servo_state()
+
+    def reset_servos(self):
+        """Return all servos to the starting angle if needed."""
+        for pin in self.servo_pins:
+            if self.servo_state.get(pin, self.START_ANGLE) != self.START_ANGLE:
+                self.set_servo_angle(pin, self.START_ANGLE)
+
     @staticmethod
     def _angle_to_duty(angle: float) -> float:
         """Convert a servo angle in degrees to a PWM duty cycle."""
@@ -182,6 +259,8 @@ class HardwareInterface:
             print(f"[GPIO] Servo {pin} rotate {angle}° for {hold}s then {return_angle}°")
 
         threading.Thread(target=worker, daemon=True).start()
+        self.servo_state[pin] = return_angle
+        self._save_servo_state()
 
     def _pulse(self, pin: int, duration: float = 0.5):
         """Pulse a GPIO output without blocking the main thread."""
@@ -208,8 +287,8 @@ class HardwareInterface:
                 print(f"[SPI] Read failed: {exc}")
                 return 0
         else:
-            # Return random value in mock mode
-            return random.randint(0, 1023)
+            # No SPI available; return zero to avoid false hits
+            return 0
 
     def check_pressure_hit(self, channel: int) -> bool:
         """Return True if the pressure sensor crosses the configured threshold."""
@@ -218,6 +297,24 @@ class HardwareInterface:
             print(f"[Pressure] Channel {channel} hit value {value}")
             return True
         return False
+
+    def play_sound(self, effect: SoundEffect):
+        """Play a sound effect."""
+        print(f"[Sound] {effect.name}")
+
+    def set_target_led(self, target: int, color: LedColor):
+        """Set an LED colour for a specific target."""
+        print(f"[LED] Target {target} -> {color.value}")
+
+    def set_theme_lighting(self, team: Optional[Team]):
+        """Change theme lighting to match the active team or turn off."""
+        value = team.value if team else 'off'
+        print(f"[LED] Theme lighting -> {value}")
+
+    def raise_pong_platform(self):
+        """Raise the pong platform on victory."""
+        self._pulse(RELAY_EXPANSION_2, 1)
+        print("[HW] RAISE_PONG_PLATFORM")
 
     def blow_fan(self, duration: float = 5.0):
         """Activate the fan relay for the specified duration."""
@@ -405,6 +502,36 @@ class CastlesAndCansGame:
                     callback=self._gpio_target1,
                     bouncetime=200,
                 )
+                GPIO.add_event_detect(
+                    BUTTON_START,
+                    GPIO.FALLING,
+                    callback=self._gpio_start,
+                    bouncetime=300,
+                )
+                GPIO.add_event_detect(
+                    BUTTON_RESET,
+                    GPIO.FALLING,
+                    callback=self._gpio_start,
+                    bouncetime=300,
+                )
+                GPIO.add_event_detect(
+                    BUTTON_FORCE_TURN,
+                    GPIO.FALLING,
+                    callback=self._gpio_force,
+                    bouncetime=300,
+                )
+                GPIO.add_event_detect(
+                    BUTTON_RED_DISPENSE,
+                    GPIO.FALLING,
+                    callback=self._gpio_dispense_red,
+                    bouncetime=300,
+                )
+                GPIO.add_event_detect(
+                    BUTTON_GREEN_DISPENSE,
+                    GPIO.FALLING,
+                    callback=self._gpio_dispense_green,
+                    bouncetime=300,
+                )
             except Exception as exc:
                 print(f"[GPIO] Failed to add event detection: {exc}")
 
@@ -522,6 +649,7 @@ class CastlesAndCansGame:
 
     def start_game(self):
         self._log("Game started - flipping coin")
+        self.hw.reset_servos()
         self.state = GameState.COIN_FLIP
         self.status_label.config(text="Flipping coin...")
         self.target_label.config(text="")
@@ -532,6 +660,7 @@ class CastlesAndCansGame:
         self.current_target = {Team.RED: None, Team.GREEN: None}
         self.watchtower_active = False
         self.hw.rotate_servo(SERVO_3, 90)  # reset watchtower
+        self.hw.set_theme_lighting(None)
         # choose initial targets
         for team in Team:
             self.current_target[team] = self.choose_next_target(team)
@@ -545,6 +674,7 @@ class CastlesAndCansGame:
         self.status_label.config(
             text=f"{self.current_team.value} starts - hit target {self.current_target[self.current_team]}"
         )
+        self.hw.set_theme_lighting(self.current_team)
         self.hw.restore_targets(self.current_team, len(self.completed_targets[self.current_team]))
         self.state = GameState.PLAYER_TURN
         self.update_progress()
@@ -568,7 +698,7 @@ class CastlesAndCansGame:
         if target == self.current_target[self.current_team]:
             self.complete_target(target)
         else:
-            print("[HW] NEUTRAL_SOUND")
+            self.hw.play_sound(SoundEffect.NEUTRAL_HIT)
             self.status_label.config(text=f"Target {target} hit out of order - await tunnel")
             self.awaiting_tunnel = False
             self.state = GameState.AWAITING_TUNNEL
@@ -576,6 +706,9 @@ class CastlesAndCansGame:
     def complete_target(self, target: int):
         """Mark the target complete and prepare for the tunnel."""
         self._log(f"Target {target} completed by {self.current_team.value}")
+        self.hw.play_sound(SoundEffect.TARGET_HIT)
+        color = LedColor.RED if self.current_team == Team.RED else LedColor.GREEN
+        self.hw.set_target_led(target, color)
         self.completed_targets[self.current_team].add(target)
         self.update_progress()
         if len(self.completed_targets[self.current_team]) >= NUM_TARGETS:
@@ -592,19 +725,25 @@ class CastlesAndCansGame:
         self.state = GameState.GAME_OVER
         self.ball_in_play = False
         self.status_label.config(text=f"{self.current_team.value} WINS!")
+        self.hw.play_sound(SoundEffect.VICTORY)
         self.hw.drop_gate()
+        self.hw.play_sound(SoundEffect.GATE_BREACH)
+        self.hw.raise_pong_platform()
+        self.hw.set_theme_lighting(None)
 
     def start_chug_phase(self):
         """Begin the chug phase once the ball launches."""
         self._log("Chug phase started")
         self.state = GameState.CHUG
         self.hw.start_chug(self.current_team)
+        self.hw.play_sound(SoundEffect.CHUG_START)
         self.status_label.config(text=f"{self.current_team.value} CHUG!")
         # Capture a chug photo after a short delay without blocking
         self.root.after(2000, lambda: self.capture_image('chug', show=False, store_attr='chug_photo'))
 
     def end_chug_phase(self):
         self._log("Chug phase ended")
+        self.hw.play_sound(SoundEffect.CHUG_STOP)
         self.hw.stop_chug(self.current_team)
         self.next_turn()
 
@@ -653,6 +792,7 @@ class CastlesAndCansGame:
         self._log(f"Dispense beer for {team.value}")
         self.prev_status = self.status_label.cget("text")
         self.status_label.config(text=f"Dispensing beer for {team.value}")
+        self.hw.play_sound(SoundEffect.DISPENSE)
         self.hw.dispense(team)
         self.root.after(2000, lambda: self.status_label.config(text=self.prev_status))
 
@@ -667,6 +807,7 @@ class CastlesAndCansGame:
     def ball_returned(self):
         self._log("Ball returned")
         if self.state == GameState.CHUG:
+            self.hw.play_sound(SoundEffect.CHUG_STOP)
             self.hw.stop_chug(self.current_team)
             self.status_label.config(text="Stop chugging")
             self.ball_in_play = False
@@ -689,6 +830,7 @@ class CastlesAndCansGame:
         self.status_label.config(
             text=f"{self.current_team.value} turn - hit target {self.current_target[self.current_team]}"
         )
+        self.hw.set_theme_lighting(self.current_team)
         self.hw.restore_targets(self.current_team, len(self.completed_targets[self.current_team]))
         self.update_progress()
         self.ball_in_play = False
@@ -781,6 +923,18 @@ class CastlesAndCansGame:
 
     def _gpio_target1(self, channel):
         self.root.after(0, self.watchtower_ir_triggered)
+
+    def _gpio_start(self, channel):
+        self.root.after(0, self.start_game)
+
+    def _gpio_force(self, channel):
+        self.root.after(0, self.next_turn)
+
+    def _gpio_dispense_red(self, channel):
+        self.root.after(0, lambda: self.dispense_beer(Team.RED))
+
+    def _gpio_dispense_green(self, channel):
+        self.root.after(0, lambda: self.dispense_beer(Team.GREEN))
 
     def _poll_pressure_sensors(self):
         """Continuously check the pressure sensors for hits."""

@@ -61,7 +61,16 @@ When running on a Raspberry Pi with GPIO enabled, the IR sensors connected to
 **IR_TUNNEL_ENTRY** (BCM 15) and **IR_BALL_RETURN** (BCM 14) automatically
 trigger the same actions as the **t** and **b** keys.
 
+Likewise the physical buttons are mapped to their keyboard equivalents:
+the Start and Reset buttons act like **s**, the Force Next Turn button like
+**n**, and the dispense buttons match **r** and **g**.
+
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by spinning **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
+
+Servo positions are saved to `servo_state.json` whenever they move. On startup
+and whenever a new game begins, the program checks this file and only moves each
+servo back to its default 90° position if it wasn't already there. This helps
+avoid sudden movements if the Pi loses power mid-game.
 
 Team progress is stored separately, and the hardware is instructed to restore
 each side's targets whenever turns change.
@@ -116,7 +125,10 @@ or not sensitive enough.
 
 `HardwareInterface` in `src/game.py` abstracts every output the real game will
 control.  When running on a desktop these methods simply print messages so the
-logic can be tested without wiring anything up.  The key actions are:
+logic can be tested without wiring anything up.  It also includes helper
+functions for playing sounds and driving LEDs so the high-level logic stays the
+same once real hardware is connected. The key actions are:
+
 
 | Method | Purpose |
 |--------|---------|
@@ -128,6 +140,10 @@ logic can be tested without wiring anything up.  The key actions are:
 | `activate_tunnel(n)` | Indicate a ball has entered tunnel `n` |
 | `launch_plunger()` | Fire the plunger to launch the ball |
 | `restore_targets(team, hits)` | Reset physical targets to a team's progress |
+| `play_sound(effect)` | Play an audio effect |
+| `set_target_led(target, color)` | Change a target's indicator LED |
+| `set_theme_lighting(team)` | Adjust theme lighting for the active team |
+| `raise_pong_platform()` | Raise the pong platform on victory |
 
 These helper methods allow the software to run headless or on different
 hardware by adjusting only the implementation in one place.
