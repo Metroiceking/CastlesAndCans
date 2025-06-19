@@ -61,8 +61,7 @@ RELAY_EXPANSION_3 = 26
 NEOPIXEL_PIN = 18
 
 BUTTON_START = 23
-BUTTON_RESET = 24
-BUTTON_FORCE_TURN = 25
+BUTTON_FORCE_TURN = 24
 BUTTON_RED_DISPENSE = 20
 BUTTON_GREEN_DISPENSE = 21
 
@@ -156,7 +155,6 @@ class HardwareInterface:
 
             for pin in [
                 BUTTON_START,
-                BUTTON_RESET,
                 BUTTON_FORCE_TURN,
                 BUTTON_RED_DISPENSE,
                 BUTTON_GREEN_DISPENSE,
@@ -509,12 +507,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 GPIO.add_event_detect(
-                    BUTTON_RESET,
-                    GPIO.RISING,
-                    callback=self._gpio_start,
-                    bouncetime=300,
-                )
-                GPIO.add_event_detect(
+
                     BUTTON_FORCE_TURN,
                     GPIO.RISING,
                     callback=self._gpio_force,

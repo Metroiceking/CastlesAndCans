@@ -62,7 +62,7 @@ When running on a Raspberry Pi with GPIO enabled, the IR sensors connected to
 trigger the same actions as the **t** and **b** keys.
 
 Likewise the physical buttons are mapped to their keyboard equivalents:
-the Start and Reset buttons act like **s**, the Force Next Turn button like
+the single Start/Reset button acts like **s**, the Force Next Turn button like
 **n**, and the dispense buttons match **r** and **g**.  These buttons should
 be wired between the Pi's 3.3 V rail and the respective GPIO pin; the
 script enables the internal pull‑down resistors so a press registers as a
@@ -165,9 +165,8 @@ initialises these pins automatically when RPi.GPIO is available.
 | RELAY_EXPANSION_2        | 19      | 35         |
 | RELAY_EXPANSION_3        | 26      | 37         |
 | NEOPIXEL_PIN             | 18      | 12         |
-| BUTTON_START             | 23      | 16         |
-| BUTTON_RESET             | 24      | 18         |
-| BUTTON_FORCE_TURN        | 25      | 22         |
+| BUTTON_START/RESET       | 23      | 16         |
+| BUTTON_FORCE_TURN        | 24      | 18         |
 | BUTTON_RED_DISPENSE      | 20      | 38         |
 | BUTTON_GREEN_DISPENSE    | 21      | 40         |
 | IR_BALL_RETURN           | 14      | 8          |
