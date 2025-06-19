@@ -80,6 +80,7 @@ and whenever a new game begins, the program restores each servo to its saved
 starting angle only if necessary. This helps avoid sudden movements if the Pi
 loses power mid-game.
 
+
 Team progress is stored separately, and the hardware is instructed to restore
 each side's targets whenever turns change.
 
@@ -208,3 +209,4 @@ initialises these pins automatically when RPi.GPIO is available.
 | SERVO_6                  | 27      | 13         | (unassigned) |
 | SERVO_7                  | 22      | 15         | (unassigned) |
 | SERVO_8                  | 7       | 26         | (unassigned) |
+

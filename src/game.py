@@ -145,6 +145,7 @@ class HardwareInterface:
         ]
         # Map BCM pins back to servo numbers for clearer logs
         self.servo_numbers = {pin: i + 1 for i, pin in enumerate(self.servo_pins)}
+
         if self.available:
             outputs = [
                 RELAY_FAN,
@@ -205,6 +206,7 @@ class HardwareInterface:
         """Load servo positions and start angles from disk."""
         self.servo_state = {pin: self.DEFAULT_START_ANGLE for pin in self.servo_pins}
         self.servo_start = {pin: self.DEFAULT_START_ANGLE for pin in self.servo_pins}
+
         if os.path.exists(self.SERVO_STATE_FILE):
             try:
                 with open(self.SERVO_STATE_FILE, "r") as fh:
@@ -220,6 +222,7 @@ class HardwareInterface:
                         self.servo_state[pin] = positions[str(pin)]
                     if str(pin) in starts:
                         self.servo_start[pin] = starts[str(pin)]
+
             except Exception as exc:
                 print(f"[Servo] Failed to load state: {exc}")
 
@@ -243,6 +246,7 @@ class HardwareInterface:
                 time.sleep(0.5)
                 pwm.stop()
             num = self.servo_numbers.get(pin, pin)
+
             print(f"[GPIO] Servo {num} (pin {pin}) -> {ang}°")
 
         threading.Thread(target=worker, daemon=True).start()
@@ -261,6 +265,7 @@ class HardwareInterface:
         """Convert a 0–180° angle to a PWM duty cycle."""
         ang = max(0, min(angle, HardwareInterface.MAX_ANGLE))
         return 2.5 + (ang / 18.0)
+
 
     def rotate_servo(self, pin: int, angle: float, hold: float = 0, return_angle: float = 90):
         """Rotate a servo asynchronously and return it to ``return_angle``."""
@@ -522,6 +527,7 @@ class CastlesAndCansGame:
                     bouncetime=200,
                 )
                 print(f"[GPIO] Event detect added for tunnel on pin {IR_TUNNEL_ENTRY}")
+
                 GPIO.add_event_detect(
                     IR_BALL_RETURN,
                     GPIO.RISING,
@@ -536,6 +542,7 @@ class CastlesAndCansGame:
                     bouncetime=200,
                 )
                 print(f"[GPIO] Event detect added for target IR on pin {IR_TARGET_1}")
+
                 GPIO.add_event_detect(
                     BUTTON_START,
                     GPIO.RISING,
@@ -544,6 +551,7 @@ class CastlesAndCansGame:
                 )
                 print(f"[GPIO] Event detect added for start on pin {BUTTON_START}")
                 GPIO.add_event_detect(
+
                     BUTTON_FORCE_TURN,
                     GPIO.RISING,
                     callback=self._gpio_force,
@@ -557,6 +565,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 print(f"[GPIO] Event detect added for red dispense on pin {BUTTON_RED_DISPENSE}")
+
                 GPIO.add_event_detect(
                     BUTTON_GREEN_DISPENSE,
                     GPIO.RISING,
@@ -564,6 +573,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 print(f"[GPIO] Event detect added for green dispense on pin {BUTTON_GREEN_DISPENSE}")
+
             except Exception as exc:
                 print(f"[GPIO] Failed to add event detection: {exc}")
 
@@ -975,6 +985,7 @@ class CastlesAndCansGame:
 
     def _gpio_dispense_green(self, channel):
         print(f"[GPIO] Green dispense button pressed on pin {channel}")
+
         self.root.after(0, lambda: self.dispense_beer(Team.GREEN))
 
     def _poll_pressure_sensors(self):
@@ -1069,6 +1080,7 @@ class CastlesAndCansGame:
                 print(f"[Cmd] Unknown servo {num}")
                 return
             self.hw.set_servo_angle(pin, angle)
+
         elif action == "calibrate" and len(parts) >= 3:
             try:
                 num = int(parts[1])
@@ -1076,6 +1088,7 @@ class CastlesAndCansGame:
             except ValueError:
                 print("[Cmd] Usage: calibrate <servo> <angle>")
                 return
+
             pin = self.servo_map.get(num)
             if not pin:
                 print(f"[Cmd] Unknown servo {num}")
@@ -1084,6 +1097,7 @@ class CastlesAndCansGame:
             self.hw.servo_start[pin] = angle
             self.hw.set_servo_angle(pin, angle)
             self.hw._save_servo_state()
+
         elif action == "hit" and len(parts) >= 2:
             try:
                 target = int(parts[1])
