@@ -61,7 +61,6 @@ RELAY_EXPANSION_3 = 26
 NEOPIXEL_PIN = 18
 
 BUTTON_START = 23
-# Start and Reset share the same button
 BUTTON_FORCE_TURN = 24
 BUTTON_RED_DISPENSE = 20
 BUTTON_GREEN_DISPENSE = 21
@@ -508,6 +507,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 GPIO.add_event_detect(
+
                     BUTTON_FORCE_TURN,
                     GPIO.RISING,
                     callback=self._gpio_force,
