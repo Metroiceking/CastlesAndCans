@@ -71,7 +71,6 @@ Console messages like ``[GPIO] Start button pressed`` confirm that the
 callbacks are firing. If no message appears when pressing a button,
 double-check the wiring (3.3 V → button → GPIO) and that the script is
 running on a Pi with ``RPi.GPIO`` installed.
-
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by spinning **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
 
 Servo positions are saved to `servo_state.json` whenever they move. On startup
@@ -155,6 +154,7 @@ logic can be tested without wiring anything up.  It also includes helper
 functions for playing sounds and driving LEDs so the high-level logic stays the
 same once real hardware is connected. The key actions are:
 
+
 | Method | Purpose |
 |--------|---------|
 | `blow_fan(duration)` | Pulse the fan relay to clear the ball return tube |
@@ -177,6 +177,7 @@ hardware by adjusting only the implementation in one place.
 
 The table below lists the BCM GPIO pins used by the project. The Python script
 initialises these pins automatically when RPi.GPIO is available.
+
 
 | Component                | BCM Pin | Header Pin | Notes |
 |--------------------------|---------|------------|-------|
@@ -206,3 +207,4 @@ initialises these pins automatically when RPi.GPIO is available.
 | SERVO_6                  | 27      | 13         | (unassigned) |
 | SERVO_7                  | 22      | 15         | (unassigned) |
 | SERVO_8                  | 7       | 26         | (unassigned) |
+

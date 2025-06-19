@@ -497,6 +497,7 @@ class CastlesAndCansGame:
                     bouncetime=200,
                 )
                 print(f"[GPIO] Event detect added for tunnel on pin {IR_TUNNEL_ENTRY}")
+
                 GPIO.add_event_detect(
                     IR_BALL_RETURN,
                     GPIO.RISING,
@@ -511,6 +512,7 @@ class CastlesAndCansGame:
                     bouncetime=200,
                 )
                 print(f"[GPIO] Event detect added for target IR on pin {IR_TARGET_1}")
+
                 GPIO.add_event_detect(
                     BUTTON_START,
                     GPIO.RISING,
@@ -519,6 +521,7 @@ class CastlesAndCansGame:
                 )
                 print(f"[GPIO] Event detect added for start on pin {BUTTON_START}")
                 GPIO.add_event_detect(
+
                     BUTTON_FORCE_TURN,
                     GPIO.RISING,
                     callback=self._gpio_force,
@@ -532,6 +535,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 print(f"[GPIO] Event detect added for red dispense on pin {BUTTON_RED_DISPENSE}")
+
                 GPIO.add_event_detect(
                     BUTTON_GREEN_DISPENSE,
                     GPIO.RISING,
@@ -539,6 +543,7 @@ class CastlesAndCansGame:
                     bouncetime=300,
                 )
                 print(f"[GPIO] Event detect added for green dispense on pin {BUTTON_GREEN_DISPENSE}")
+
             except Exception as exc:
                 print(f"[GPIO] Failed to add event detection: {exc}")
 
@@ -950,6 +955,7 @@ class CastlesAndCansGame:
 
     def _gpio_dispense_green(self, channel):
         print(f"[GPIO] Green dispense button pressed on pin {channel}")
+
         self.root.after(0, lambda: self.dispense_beer(Team.GREEN))
 
     def _poll_pressure_sensors(self):
