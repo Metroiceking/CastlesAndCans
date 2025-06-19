@@ -126,7 +126,8 @@ class HardwareInterface:
     """Basic GPIO control for the Castles & Cans hardware."""
 
     SERVO_STATE_FILE = "servo_state.json"
-    START_ANGLE = 90
+    DEFAULT_START_ANGLE = 90
+    MAX_ANGLE = 180
 
     def __init__(self, pressure_sensitivity: int = PRESSURE_SENSITIVITY):
         self.available = GPIO_AVAILABLE
@@ -202,31 +203,43 @@ class HardwareInterface:
         self.reset_servos()
 
     def _load_servo_state(self):
-        """Load last known servo angles from disk."""
-        self.servo_state = {pin: self.START_ANGLE for pin in self.servo_pins}
+        """Load servo positions and start angles from disk."""
+        self.servo_state = {pin: self.DEFAULT_START_ANGLE for pin in self.servo_pins}
+        self.servo_start = {pin: self.DEFAULT_START_ANGLE for pin in self.servo_pins}
+
         if os.path.exists(self.SERVO_STATE_FILE):
             try:
                 with open(self.SERVO_STATE_FILE, "r") as fh:
                     data = json.load(fh)
-                for pin, angle in data.items():
-                    self.servo_state[int(pin)] = angle
+                if "positions" in data and "start_angles" in data:
+                    positions = data.get("positions", {})
+                    starts = data.get("start_angles", {})
+                else:
+                    positions = data
+                    starts = {}
+                for pin in self.servo_pins:
+                    if str(pin) in positions:
+                        self.servo_state[pin] = positions[str(pin)]
+                    if str(pin) in starts:
+                        self.servo_start[pin] = starts[str(pin)]
+
             except Exception as exc:
                 print(f"[Servo] Failed to load state: {exc}")
 
     def _save_servo_state(self):
         try:
             with open(self.SERVO_STATE_FILE, "w") as fh:
-                json.dump(self.servo_state, fh)
+                json.dump({"positions": self.servo_state, "start_angles": self.servo_start}, fh)
         except Exception as exc:
             print(f"[Servo] Failed to save state: {exc}")
 
     def set_servo_angle(self, pin: int, angle: float):
-        """Move servo to ``angle`` within a 0–360° range and record the position."""
+        """Move servo to ``angle`` within 0–180° and record the position."""
+
+        ang = max(0, min(angle, self.MAX_ANGLE))
 
         def worker():
-            ang = angle % 360
             duty = self._angle_to_duty(ang)
-
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
                 pwm.start(duty)
@@ -238,27 +251,29 @@ class HardwareInterface:
 
         threading.Thread(target=worker, daemon=True).start()
         self.servo_state[pin] = ang
-
         self._save_servo_state()
 
     def reset_servos(self):
-        """Return all servos to the starting angle if needed."""
+        """Return all servos to their configured starting angle if needed."""
         for pin in self.servo_pins:
-            if self.servo_state.get(pin, self.START_ANGLE) != self.START_ANGLE:
-                self.set_servo_angle(pin, self.START_ANGLE)
+            start = self.servo_start.get(pin, self.DEFAULT_START_ANGLE)
+            if self.servo_state.get(pin, start) != start:
+                self.set_servo_angle(pin, start)
 
     @staticmethod
     def _angle_to_duty(angle: float) -> float:
-        """Convert a 0–360° angle to a PWM duty cycle (approximate)."""
-        ang = angle % 360
-        return 2.5 + (ang / 36.0)
+        """Convert a 0–180° angle to a PWM duty cycle."""
+        ang = max(0, min(angle, HardwareInterface.MAX_ANGLE))
+        return 2.5 + (ang / 18.0)
+
 
     def rotate_servo(self, pin: int, angle: float, hold: float = 0, return_angle: float = 90):
         """Rotate a servo asynchronously and return it to ``return_angle``."""
 
+        start = max(0, min(angle, self.MAX_ANGLE))
+        end = max(0, min(return_angle, self.MAX_ANGLE))
+
         def worker():
-            start = angle % 360
-            end = return_angle % 360
             duty_start = self._angle_to_duty(start)
             duty_return = self._angle_to_duty(end)
             if self.available:
@@ -279,26 +294,6 @@ class HardwareInterface:
         self.servo_state[pin] = end
         self._save_servo_state()
 
-    def spin_servo(self, pin: int, clockwise: bool = True, speed: float = 1.0, duration: Optional[float] = None):
-        """Spin a continuous-rotation servo. Stops automatically after ``duration`` seconds if provided."""
-
-        def worker():
-            duty = 7.5 + (2.5 * speed if clockwise else -2.5 * speed)
-            pwm = None
-            if self.available:
-                pwm = GPIO.PWM(pin, 50)
-                pwm.start(duty)
-            num = self.servo_numbers.get(pin, pin)
-            print(f"[GPIO] Servo {num} (pin {pin}) spin {'CW' if clockwise else 'CCW'}" + (f" for {duration}s" if duration else ""))
-            if duration:
-                time.sleep(duration)
-                if self.available and pwm:
-                    pwm.stop()
-        threading.Thread(target=worker, daemon=True).start()
-
-    def stop_servo(self, pin: int):
-        """Stop a previously spun continuous servo."""
-        self.set_servo_angle(pin, 90)
 
     def _pulse(self, pin: int, duration: float = 0.5):
         """Pulse a GPIO output without blocking the main thread."""
@@ -1086,20 +1081,22 @@ class CastlesAndCansGame:
                 return
             self.hw.set_servo_angle(pin, angle)
 
-        elif action == "spin" and len(parts) >= 3:
+        elif action == "calibrate" and len(parts) >= 3:
             try:
                 num = int(parts[1])
+                angle = float(parts[2])
             except ValueError:
-                print("[Cmd] Usage: spin <servo> <cw|ccw> [duration]")
+                print("[Cmd] Usage: calibrate <servo> <angle>")
                 return
-            direction = parts[2].lower()
-            dur = float(parts[3]) if len(parts) >= 4 else None
+
             pin = self.servo_map.get(num)
             if not pin:
                 print(f"[Cmd] Unknown servo {num}")
                 return
-            cw = direction != 'ccw'
-            self.hw.spin_servo(pin, clockwise=cw, duration=dur)
+            angle = max(0, min(angle, self.hw.MAX_ANGLE))
+            self.hw.servo_start[pin] = angle
+            self.hw.set_servo_angle(pin, angle)
+            self.hw._save_servo_state()
 
         elif action == "hit" and len(parts) >= 2:
             try:
