@@ -161,7 +161,7 @@ class HardwareInterface:
                 BUTTON_RED_DISPENSE,
                 BUTTON_GREEN_DISPENSE,
             ]:
-                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
             for pin in [IR_BALL_RETURN, IR_TUNNEL_ENTRY, IR_TARGET_1]:
                 GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -504,31 +504,31 @@ class CastlesAndCansGame:
                 )
                 GPIO.add_event_detect(
                     BUTTON_START,
-                    GPIO.FALLING,
+                    GPIO.RISING,
                     callback=self._gpio_start,
                     bouncetime=300,
                 )
                 GPIO.add_event_detect(
                     BUTTON_RESET,
-                    GPIO.FALLING,
+                    GPIO.RISING,
                     callback=self._gpio_start,
                     bouncetime=300,
                 )
                 GPIO.add_event_detect(
                     BUTTON_FORCE_TURN,
-                    GPIO.FALLING,
+                    GPIO.RISING,
                     callback=self._gpio_force,
                     bouncetime=300,
                 )
                 GPIO.add_event_detect(
                     BUTTON_RED_DISPENSE,
-                    GPIO.FALLING,
+                    GPIO.RISING,
                     callback=self._gpio_dispense_red,
                     bouncetime=300,
                 )
                 GPIO.add_event_detect(
                     BUTTON_GREEN_DISPENSE,
-                    GPIO.FALLING,
+                    GPIO.RISING,
                     callback=self._gpio_dispense_green,
                     bouncetime=300,
                 )

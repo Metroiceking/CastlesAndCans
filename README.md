@@ -63,7 +63,10 @@ trigger the same actions as the **t** and **b** keys.
 
 Likewise the physical buttons are mapped to their keyboard equivalents:
 the Start and Reset buttons act like **s**, the Force Next Turn button like
-**n**, and the dispense buttons match **r** and **g**.
+**n**, and the dispense buttons match **r** and **g**.  These buttons should
+be wired between the Pi's 3.3 V rail and the respective GPIO pin; the
+script enables the internal pull‑down resistors so a press registers as a
+RISING edge.
 
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by spinning **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
 
@@ -182,3 +185,4 @@ initialises these pins automatically when RPi.GPIO is available.
 | SERVO_6                  | 27      | 13         |
 | SERVO_7                  | 22      | 15         |
 | SERVO_8                  | 7       | 26         |
+
