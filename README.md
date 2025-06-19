@@ -73,7 +73,9 @@ double-check the wiring (3.3 V → button → GPIO) and that the script is
 running on a Pi with ``RPi.GPIO`` installed.
 
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by spinning **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
+
 Servo angles are now recognised from **0–360°** (values wrap around), so you may rotate a servo multiple times in either direction. Continuous‑rotation servos can be spun with the new `spin` command described below.
+
 
 Servo positions are saved to `servo_state.json` whenever they move. On startup
 and whenever a new game begins, the program checks this file and only moves each
@@ -208,3 +210,4 @@ initialises these pins automatically when RPi.GPIO is available.
 | SERVO_6                  | 27      | 13         | (unassigned) |
 | SERVO_7                  | 22      | 15         | (unassigned) |
 | SERVO_8                  | 7       | 26         | (unassigned) |
+
