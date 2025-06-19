@@ -73,12 +73,14 @@ double-check the wiring (3.3 V → button → GPIO) and that the script is
 running on a Pi with ``RPi.GPIO`` installed.
 
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by rotating **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
+
 Servo angles are recognised from **0–180°**. Use the `calibrate` command to set each servo's starting angle if needed. Movements default to around 180°/s but can be slowed using the optional ``speed`` parameter of the `servo` command.
 
 Servo positions and starting angles are saved to `servo_state.json`. On startup
 and whenever a new game begins, the program restores each servo to its saved
 starting angle only if necessary. This helps avoid sudden movements if the Pi
 loses power mid-game.
+
 
 Team progress is stored separately, and the hardware is instructed to restore
 each side's targets whenever turns change.
@@ -114,6 +116,7 @@ dispense <red|green>       # open a beer door
 Specify a slower ``speed`` to move a servo gradually. For example
 `servo 3 50 20` rotates servo 3 to 50° at 20 °/s. The keyboard shortcuts
 listed above still work alongside these commands.
+
 
 ### Camera captures and uploads
 
