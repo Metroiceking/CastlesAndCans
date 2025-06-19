@@ -86,7 +86,7 @@ SERVO_8 = 7
 
 # Pressure sensors via MCP3008 channels
 PRESSURE_CHANNELS = [0, 1, 2, 3]
-PRESSURE_SENSITIVITY = 200  # ADC threshold for detecting a hit
+PRESSURE_SENSITIVITY_DEFAULT = 200  # Default ADC threshold for detecting a hit
 
 class Team(Enum):
     RED = 'Red'
@@ -126,13 +126,14 @@ class HardwareInterface:
     """Basic GPIO control for the Castles & Cans hardware."""
 
     SERVO_STATE_FILE = "servo_state.json"
+    PRESSURE_FILE = "pressure_sensitivity.json"
     DEFAULT_START_ANGLE = 90
     MAX_ANGLE = 180
 
-    def __init__(self, pressure_sensitivity: int = PRESSURE_SENSITIVITY):
+    def __init__(self, pressure_sensitivity: int = PRESSURE_SENSITIVITY_DEFAULT):
         self.available = GPIO_AVAILABLE
         self.spi_available = SPI_AVAILABLE
-        self.pressure_sensitivity = pressure_sensitivity
+        self.pressure_sensitivity = {ch: pressure_sensitivity for ch in PRESSURE_CHANNELS}
         self.servo_pins = [
             SERVO_1,
             SERVO_2,
@@ -145,7 +146,7 @@ class HardwareInterface:
         ]
         # Map BCM pins back to servo numbers for clearer logs
         self.servo_numbers = {pin: i + 1 for i, pin in enumerate(self.servo_pins)}
-
+        
         if self.available:
             outputs = [
                 RELAY_FAN,
@@ -200,13 +201,14 @@ class HardwareInterface:
             print("[SPI] Using mock ADC readings")
 
         self._load_servo_state()
+        self._load_pressure_sensitivity()
         self.reset_servos()
 
     def _load_servo_state(self):
         """Load servo positions and start angles from disk."""
         self.servo_state = {pin: self.DEFAULT_START_ANGLE for pin in self.servo_pins}
         self.servo_start = {pin: self.DEFAULT_START_ANGLE for pin in self.servo_pins}
-
+        
         if os.path.exists(self.SERVO_STATE_FILE):
             try:
                 with open(self.SERVO_STATE_FILE, "r") as fh:
@@ -226,6 +228,33 @@ class HardwareInterface:
             except Exception as exc:
                 print(f"[Servo] Failed to load state: {exc}")
 
+    def _load_pressure_sensitivity(self):
+        """Load per-channel pressure sensor thresholds from disk."""
+        if os.path.exists(self.PRESSURE_FILE):
+            try:
+                with open(self.PRESSURE_FILE, "r") as fh:
+                    data = json.load(fh)
+                for ch in PRESSURE_CHANNELS:
+                    if str(ch) in data:
+                        self.pressure_sensitivity[ch] = int(data[str(ch)])
+            except Exception as exc:
+                print(f"[Pressure] Failed to load sensitivity: {exc}")
+        else:
+            self._save_pressure_sensitivity()
+
+    def _save_pressure_sensitivity(self):
+        try:
+            with open(self.PRESSURE_FILE, "w") as fh:
+                json.dump({str(ch): self.pressure_sensitivity.get(ch, PRESSURE_SENSITIVITY_DEFAULT) for ch in PRESSURE_CHANNELS}, fh)
+        except Exception as exc:
+            print(f"[Pressure] Failed to save sensitivity: {exc}")
+
+    def set_pressure_sensitivity(self, channel: int, threshold: int):
+        if channel not in PRESSURE_CHANNELS:
+            raise ValueError(f"Channel {channel} not in PRESSURE_CHANNELS")
+        self.pressure_sensitivity[channel] = int(threshold)
+        self._save_pressure_sensitivity()
+
     def _save_servo_state(self):
         try:
             with open(self.SERVO_STATE_FILE, "w") as fh:
@@ -233,21 +262,27 @@ class HardwareInterface:
         except Exception as exc:
             print(f"[Servo] Failed to save state: {exc}")
 
-    def set_servo_angle(self, pin: int, angle: float):
-        """Move servo to ``angle`` within 0–180° and record the position."""
+    def set_servo_angle(self, pin: int, angle: float, speed: float = 180.0):
+        """Move servo to ``angle`` within 0–180° using optional ``speed``.
+
+        ``speed`` is given in degrees per second; lower values move the servo
+        more slowly. The movement happens asynchronously so the UI remains
+        responsive.
+        """
 
         ang = max(0, min(angle, self.MAX_ANGLE))
 
         def worker():
-            duty = self._angle_to_duty(ang)
+            start = self.servo_state.get(pin, self.DEFAULT_START_ANGLE)
+            duration = abs(ang - start) / speed if speed > 0 else 0
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
-                pwm.start(duty)
-                time.sleep(0.5)
+                pwm.start(self._angle_to_duty(start))
+                self._move_servo(pwm, start, ang, duration)
+                time.sleep(0.1)
                 pwm.stop()
             num = self.servo_numbers.get(pin, pin)
-
-            print(f"[GPIO] Servo {num} (pin {pin}) -> {ang}°")
+            print(f"[GPIO] Servo {num} (pin {pin}) -> {ang}° at {speed}°/s")
 
         threading.Thread(target=worker, daemon=True).start()
         self.servo_state[pin] = ang
@@ -266,33 +301,55 @@ class HardwareInterface:
         ang = max(0, min(angle, HardwareInterface.MAX_ANGLE))
         return 2.5 + (ang / 18.0)
 
+    def rotate_servo(
+        self,
+        pin: int,
+        angle: float,
+        hold: float = 0,
+        return_angle: float = 90,
+        speed: float = 180.0,
+    ):
+        """Rotate a servo and optionally return it.
 
-    def rotate_servo(self, pin: int, angle: float, hold: float = 0, return_angle: float = 90):
-        """Rotate a servo asynchronously and return it to ``return_angle``."""
+        ``speed`` controls how quickly the servo moves in degrees per second.
+        """
 
         start = max(0, min(angle, self.MAX_ANGLE))
         end = max(0, min(return_angle, self.MAX_ANGLE))
 
         def worker():
-            duty_start = self._angle_to_duty(start)
-            duty_return = self._angle_to_duty(end)
+            current = self.servo_state.get(pin, self.DEFAULT_START_ANGLE)
+            move_time = abs(start - current) / speed if speed > 0 else 0
+            return_time = abs(end - start) / speed if speed > 0 else 0
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
-                pwm.start(duty_start)
-                time.sleep(0.5)
+                pwm.start(self._angle_to_duty(current))
+                self._move_servo(pwm, current, start, move_time)
                 if hold:
                     time.sleep(hold)
-                pwm.ChangeDutyCycle(duty_return)
-                time.sleep(0.5)
+                self._move_servo(pwm, start, end, return_time)
+                time.sleep(0.1)
                 pwm.stop()
             num = self.servo_numbers.get(pin, pin)
             print(
-                f"[GPIO] Servo {num} (pin {pin}) rotate {start}° for {hold}s then {end}°"
+                f"[GPIO] Servo {num} (pin {pin}) rotate {start}° for {hold}s then {end}° at {speed}°/s"
             )
 
         threading.Thread(target=worker, daemon=True).start()
         self.servo_state[pin] = end
         self._save_servo_state()
+
+    def _move_servo(self, pwm, start: float, end: float, duration: float):
+        """Gradually move ``pwm`` from ``start`` to ``end`` over ``duration`` seconds."""
+        steps = max(1, int(abs(end - start)))
+        step_delay = duration / steps if steps else 0
+        step_angle = (end - start) / steps if steps else 0
+        angle = start
+        for _ in range(steps):
+            angle += step_angle
+            pwm.ChangeDutyCycle(self._angle_to_duty(angle))
+            if step_delay:
+                time.sleep(step_delay)
 
 
     def _pulse(self, pin: int, duration: float = 0.5):
@@ -326,7 +383,8 @@ class HardwareInterface:
     def check_pressure_hit(self, channel: int) -> bool:
         """Return True if the pressure sensor crosses the configured threshold."""
         value = self.read_adc(channel)
-        if value > self.pressure_sensitivity:
+        threshold = self.pressure_sensitivity.get(channel, PRESSURE_SENSITIVITY_DEFAULT)
+        if value > threshold:
             print(f"[Pressure] Channel {channel} hit value {value}")
             return True
         return False
@@ -993,7 +1051,8 @@ class CastlesAndCansGame:
         while True:
             for ch in PRESSURE_CHANNELS:
                 value = self.hw.read_adc(ch)
-                active = value > self.hw.pressure_sensitivity
+                threshold = self.hw.pressure_sensitivity.get(ch, PRESSURE_SENSITIVITY_DEFAULT)
+                active = value > threshold
                 if active and not self._pressure_state[ch]:
                     self._pressure_state[ch] = True
                     self.pressure_hits[ch] += 1
@@ -1013,13 +1072,13 @@ class CastlesAndCansGame:
             self._log("Watchtower pressure hit")
             self.watchtower_active = True
             self.status_label.config(text="Watchtower struck!")
-            # Rotate servo 40 degrees counterclockwise from centre (90 -> 50)
-            self.hw.rotate_servo(SERVO_3, 50)
+            # Rotate servo slowly to topple the tower (90 -> 50)
+            self.hw.rotate_servo(SERVO_3, 50, speed=20)
 
     def watchtower_ir_triggered(self):
         if self.watchtower_active and self.current_target[self.current_team] == 1:
             self._log("Watchtower IR complete")
-            self.hw.rotate_servo(SERVO_3, 90)
+            self.hw.rotate_servo(SERVO_3, 90, speed=20)
             self.watchtower_active = False
             self.complete_target(1)
 
@@ -1056,7 +1115,26 @@ class CastlesAndCansGame:
                 break
             if not line:
                 continue
-            self.root.after(0, self.process_command, line.strip())
+            result = self.process_command(line.strip())
+            if result == "EXIT":
+                break
+
+    def _print_help(self):
+        """Print available commands for the console interface."""
+        print("Available commands:")
+        print("  help                         Show this help message")
+        print("  servo <n> <angle> [speed]    Rotate servo n to angle (0-180)")
+        print("  calibrate <n> <angle>        Set servo n's starting angle")
+        print("  sensitivity <ch> <val>       Set pressure sensor threshold")
+        print("  hit <n>                      Trigger target n")
+        print("  tunnel                       Simulate tunnel sensor")
+        print("  launch                       Fire the plunger")
+        print("  return                       Simulate ball return")
+        print("  dispense <red|green>         Dispense beer for a team")
+        print("  watchtower_pressure (wp)     Trigger watchtower pressure sensor")
+        print("  watchtower_ir (wi)           Trigger watchtower IR sensor")
+        print("  start | reset                Start or reset the game")
+        print("  exit                         Quit command mode")
 
     def process_command(self, cmd: str):
         """Handle a console command."""
@@ -1064,7 +1142,9 @@ class CastlesAndCansGame:
         if not parts:
             return
         action = parts[0].lower()
-        if action in ("watchtower_pressure", "wp"):
+        if action in ("help", "?"):
+            self._print_help()
+        elif action in ("watchtower_pressure", "wp"):
             self.watchtower_pressure_hit()
         elif action in ("watchtower_ir", "wi"):
             self.watchtower_ir_triggered()
@@ -1072,15 +1152,15 @@ class CastlesAndCansGame:
             try:
                 num = int(parts[1])
                 angle = float(parts[2])
+                speed = float(parts[3]) if len(parts) >= 4 else 180.0
             except ValueError:
-                print("[Cmd] Usage: servo <1-8> <angle>")
+                print("[Cmd] Usage: servo <1-8> <angle> [speed]")
                 return
             pin = self.servo_map.get(num)
             if not pin:
                 print(f"[Cmd] Unknown servo {num}")
                 return
-            self.hw.set_servo_angle(pin, angle)
-
+            self.hw.set_servo_angle(pin, angle, speed)
         elif action == "calibrate" and len(parts) >= 3:
             try:
                 num = int(parts[1])
@@ -1088,7 +1168,6 @@ class CastlesAndCansGame:
             except ValueError:
                 print("[Cmd] Usage: calibrate <servo> <angle>")
                 return
-
             pin = self.servo_map.get(num)
             if not pin:
                 print(f"[Cmd] Unknown servo {num}")
@@ -1097,6 +1176,18 @@ class CastlesAndCansGame:
             self.hw.servo_start[pin] = angle
             self.hw.set_servo_angle(pin, angle)
             self.hw._save_servo_state()
+        elif action == "sensitivity" and len(parts) >= 3:
+            try:
+                ch = int(parts[1])
+                value = int(parts[2])
+            except ValueError:
+                print("[Cmd] Usage: sensitivity <channel> <threshold>")
+                return
+            if ch not in PRESSURE_CHANNELS:
+                print(f"[Cmd] Unknown channel {ch}")
+                return
+            self.hw.set_pressure_sensitivity(ch, value)
+            print(f"[Cmd] Channel {ch} sensitivity set to {value}")
 
         elif action == "hit" and len(parts) >= 2:
             try:
@@ -1121,6 +1212,8 @@ class CastlesAndCansGame:
                 self.dispense_beer(Team.GREEN)
             else:
                 print("[Cmd] Usage: dispense <red|green>")
+        elif action == "exit":
+            return "EXIT"
         else:
             print(f"[Cmd] Unknown command: {cmd}")
 

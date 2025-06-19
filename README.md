@@ -73,7 +73,8 @@ double-check the wiring (3.3 V → button → GPIO) and that the script is
 running on a Pi with ``RPi.GPIO`` installed.
 
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by rotating **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
-Servo angles are recognised from **0–180°**. Use the `calibrate` command to set each servo's starting angle if needed.
+
+Servo angles are recognised from **0–180°**. Use the `calibrate` command to set each servo's starting angle if needed. Movements default to around 180°/s but can be slowed using the optional ``speed`` parameter of the `servo` command.
 
 Servo positions and starting angles are saved to `servo_state.json`. On startup
 and whenever a new game begins, the program restores each servo to its saved
@@ -94,22 +95,28 @@ systems.
 ### Command interface
 
 When running the prototype from a terminal you can also type commands to
-manually trigger sensors or move servos. Commands are processed in the
-background so the UI remains responsive. Useful commands include:
+manually trigger sensors or move servos. Type `help` at any time to list
+available commands. Commands are processed in the background so the UI
+remains responsive. Useful commands include:
 
 ```
-servo <n> <angle>     # rotate servo number n to the given 0-180° angle
-calibrate <n> <angle> # set servo n's starting angle
-watchtower_pressure   # simulate the watchtower pressure sensor
-watchtower_ir         # simulate the watchtower IR detector
-hit <n>               # trigger target n
-tunnel                # activate the tunnel sensor
-launch                # fire the plunger when ready
-return                # signal the ball return sensor
-dispense <red|green>  # open a beer door
+help                  # show available commands
+servo <n> <angle> [speed]  # rotate servo n to angle (speed deg/s)
+calibrate <n> <angle>      # set servo n's starting angle
+sensitivity <ch> <val>     # adjust pressure sensor threshold
+watchtower_pressure        # simulate the watchtower pressure sensor
+watchtower_ir              # simulate the watchtower IR detector
+hit <n>                    # trigger target n
+tunnel                     # activate the tunnel sensor
+launch                     # fire the plunger when ready
+return                     # signal the ball return sensor
+dispense <red|green>       # open a beer door
 ```
 
-The keyboard shortcuts listed above still work alongside these commands.
+Specify a slower ``speed`` to move a servo gradually. For example
+`servo 3 50 20` rotates servo 3 to 50° at 20 °/s. The keyboard shortcuts
+listed above still work alongside these commands.
+
 
 ### Camera captures and uploads
 
@@ -143,12 +150,13 @@ exceeds a sensitivity threshold.  Hits are counted per channel for future
 expansion.
 
 Target 1 is a small watchtower. Hitting the front pressure sensor (channel 0)
-rotates **Servo 3** 40° counterclockwise to reveal an infrared beam inside the
-tower. When that beam (``IR_TARGET_1``) is broken, the target is marked
-complete and the servo returns to its starting position.
+rotates **Servo 3** 40° counterclockwise at a slow speed to "topple" the tower
+and reveal an infrared beam inside. When that beam (``IR_TARGET_1``) is broken,
+the target is marked complete and the servo returns to its starting position.
 
-Adjust `PRESSURE_SENSITIVITY` in `src/game.py` if the sensors are too sensitive
-or not sensitive enough.
+Each pressure sensor has its own threshold saved in `pressure_sensitivity.json`.
+Use the command `sensitivity <channel> <value>` to fine tune a channel and the
+value will be saved for future runs.
 
 ### Hardware actions
 
@@ -209,4 +217,3 @@ initialises these pins automatically when RPi.GPIO is available.
 | SERVO_6                  | 27      | 13         | (unassigned) |
 | SERVO_7                  | 22      | 15         | (unassigned) |
 | SERVO_8                  | 7       | 26         | (unassigned) |
-
