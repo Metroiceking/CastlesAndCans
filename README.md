@@ -67,7 +67,10 @@ the single Start/Reset button acts like **s**, the Force Next Turn button like
 be wired between the Pi's 3.3 V rail and the respective GPIO pin; the
 script enables the internal pull‑down resistors so a press registers as a
 RISING edge.
-
+Console messages like ``[GPIO] Start button pressed`` confirm that the
+callbacks are firing. If no message appears when pressing a button,
+double-check the wiring (3.3 V → button → GPIO) and that the script is
+running on a Pi with ``RPi.GPIO`` installed.
 Dispensing a beer moves the tap servos. Pressing the Red button opens the red door by rotating **Servo 1** 100° counterclockwise while the Green button opens the green door by spinning **Servo 2** 100° clockwise. Each servo automatically returns to centre after three seconds.
 
 Servo positions are saved to `servo_state.json` whenever they move. On startup
@@ -84,6 +87,25 @@ Basic GPIO support is now included using BCM pin numbering. When the script
 detects the RPi.GPIO library it configures each pin as described below;
 otherwise the hardware actions are simply printed for testing on other
 systems.
+
+### Command interface
+
+When running the prototype from a terminal you can also type commands to
+manually trigger sensors or move servos. Commands are processed in the
+background so the UI remains responsive. Useful commands include:
+
+```
+servo <n> <angle>     # rotate servo number n to the given angle
+watchtower_pressure   # simulate the watchtower pressure sensor
+watchtower_ir         # simulate the watchtower IR detector
+hit <n>               # trigger target n
+tunnel                # activate the tunnel sensor
+launch                # fire the plunger when ready
+return                # signal the ball return sensor
+dispense <red|green>  # open a beer door
+```
+
+The keyboard shortcuts listed above still work alongside these commands.
 
 ### Camera captures and uploads
 
@@ -156,32 +178,33 @@ hardware by adjusting only the implementation in one place.
 The table below lists the BCM GPIO pins used by the project. The Python script
 initialises these pins automatically when RPi.GPIO is available.
 
-| Component                | BCM Pin | Header Pin |
-|--------------------------|---------|------------|
-| RELAY_FAN                | 17      | 11         |
-| RELAY_RED_DISPENSE       | 5       | 29         |
-| RELAY_GREEN_DISPENSE     | 6       | 31         |
-| RELAY_EXPANSION_1        | 13      | 33         |
-| RELAY_EXPANSION_2        | 19      | 35         |
-| RELAY_EXPANSION_3        | 26      | 37         |
-| NEOPIXEL_PIN             | 18      | 12         |
-| BUTTON_START/RESET       | 23      | 16         |
-| BUTTON_FORCE_TURN        | 24      | 18         |
-| BUTTON_RED_DISPENSE      | 20      | 38         |
-| BUTTON_GREEN_DISPENSE    | 21      | 40         |
-| IR_BALL_RETURN           | 14      | 8          |
-| IR_TUNNEL_ENTRY          | 15      | 10         |
-| IR_TARGET_1              | 0       | 27         |
-| MCP3008_CLK              | 11      | 23         |
-| MCP3008_MISO             | 9       | 21         |
-| MCP3008_MOSI             | 10      | 19         |
-| MCP3008_CS               | 8       | 24         |
-| SERVO_1                  | 12      | 32         |
-| SERVO_2                  | 16      | 36         |
-| SERVO_3                  | 4       | 7          |
-| SERVO_4                  | 3       | 5          |
-| SERVO_5                  | 2       | 3          |
-| SERVO_6                  | 27      | 13         |
-| SERVO_7                  | 22      | 15         |
-| SERVO_8                  | 7       | 26         |
+
+| Component                | BCM Pin | Header Pin | Notes |
+|--------------------------|---------|------------|-------|
+| RELAY_FAN                | 17      | 11         | Fan to clear tube |
+| RELAY_RED_DISPENSE       | 5       | 29         | Controls Red beer valve |
+| RELAY_GREEN_DISPENSE     | 6       | 31         | Controls Green beer valve |
+| RELAY_EXPANSION_1        | 13      | 33         | Spare relay |
+| RELAY_EXPANSION_2        | 19      | 35         | Spare relay |
+| RELAY_EXPANSION_3        | 26      | 37         | Spare relay |
+| NEOPIXEL_PIN             | 18      | 12         | Addressable LEDs |
+| BUTTON_START/RESET       | 23      | 16         | Start or reset game |
+| BUTTON_FORCE_TURN        | 24      | 18         | Force next turn |
+| BUTTON_RED_DISPENSE      | 20      | 38         | Dispense Red beer |
+| BUTTON_GREEN_DISPENSE    | 21      | 40         | Dispense Green beer |
+| IR_BALL_RETURN           | 14      | 8          | Detect ball return |
+| IR_TUNNEL_ENTRY          | 15      | 10         | Detect tunnel entry |
+| IR_TARGET_1              | 0       | 27         | Watchtower IR sensor |
+| MCP3008_CLK              | 11      | 23         | SPI clock |
+| MCP3008_MISO             | 9       | 21         | SPI MISO |
+| MCP3008_MOSI             | 10      | 19         | SPI MOSI |
+| MCP3008_CS               | 8       | 24         | SPI chip select |
+| SERVO_1                  | 12      | 32         | Red team beer door |
+| SERVO_2                  | 16      | 36         | Green team beer door |
+| SERVO_3                  | 4       | 7          | Watchtower rotation |
+| SERVO_4                  | 3       | 5          | (unassigned) |
+| SERVO_5                  | 2       | 3          | (unassigned) |
+| SERVO_6                  | 27      | 13         | (unassigned) |
+| SERVO_7                  | 22      | 15         | (unassigned) |
+| SERVO_8                  | 7       | 26         | (unassigned) |
 

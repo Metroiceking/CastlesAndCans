@@ -61,6 +61,7 @@ RELAY_EXPANSION_3 = 26
 NEOPIXEL_PIN = 18
 
 BUTTON_START = 23
+# Start and Reset share the same button
 BUTTON_FORCE_TURN = 24
 BUTTON_RED_DISPENSE = 20
 BUTTON_GREEN_DISPENSE = 21
@@ -152,6 +153,7 @@ class HardwareInterface:
             ]
             for pin in outputs:
                 GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
+                print(f"[GPIO] Output {pin} initialised LOW")
 
             for pin in [
                 BUTTON_START,
@@ -160,9 +162,11 @@ class HardwareInterface:
                 BUTTON_GREEN_DISPENSE,
             ]:
                 GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+                print(f"[GPIO] Input {pin} set with pull-down")
 
             for pin in [IR_BALL_RETURN, IR_TUNNEL_ENTRY, IR_TARGET_1]:
                 GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+                print(f"[GPIO] Input {pin} set with pull-down")
 
             for pin in [
                 SERVO_1,
@@ -175,6 +179,7 @@ class HardwareInterface:
                 SERVO_8,
             ]:
                 GPIO.setup(pin, GPIO.OUT)
+                print(f"[GPIO] Servo {pin} output setup")
         else:
             print("[GPIO] Running in mock mode")
 
@@ -479,6 +484,9 @@ class CastlesAndCansGame:
         self.root.bind_all('<Key>', self.handle_key)
         self.ball_in_play = False
 
+        # Map servo numbers to pins for the command interface
+        self.servo_map = {i + 1: pin for i, pin in enumerate(self.hw.servo_pins)}
+
         # Hook up GPIO callbacks for tunnel and ball return sensors
         if self.hw.available:
             try:
@@ -488,24 +496,30 @@ class CastlesAndCansGame:
                     callback=self._gpio_tunnel,
                     bouncetime=200,
                 )
+                print(f"[GPIO] Event detect added for tunnel on pin {IR_TUNNEL_ENTRY}")
+
                 GPIO.add_event_detect(
                     IR_BALL_RETURN,
                     GPIO.RISING,
                     callback=self._gpio_return,
                     bouncetime=200,
                 )
+                print(f"[GPIO] Event detect added for return on pin {IR_BALL_RETURN}")
                 GPIO.add_event_detect(
                     IR_TARGET_1,
                     GPIO.RISING,
                     callback=self._gpio_target1,
                     bouncetime=200,
                 )
+                print(f"[GPIO] Event detect added for target IR on pin {IR_TARGET_1}")
+
                 GPIO.add_event_detect(
                     BUTTON_START,
                     GPIO.RISING,
                     callback=self._gpio_start,
                     bouncetime=300,
                 )
+                print(f"[GPIO] Event detect added for start on pin {BUTTON_START}")
                 GPIO.add_event_detect(
 
                     BUTTON_FORCE_TURN,
@@ -513,23 +527,30 @@ class CastlesAndCansGame:
                     callback=self._gpio_force,
                     bouncetime=300,
                 )
+                print(f"[GPIO] Event detect added for force turn on pin {BUTTON_FORCE_TURN}")
                 GPIO.add_event_detect(
                     BUTTON_RED_DISPENSE,
                     GPIO.RISING,
                     callback=self._gpio_dispense_red,
                     bouncetime=300,
                 )
+                print(f"[GPIO] Event detect added for red dispense on pin {BUTTON_RED_DISPENSE}")
+
                 GPIO.add_event_detect(
                     BUTTON_GREEN_DISPENSE,
                     GPIO.RISING,
                     callback=self._gpio_dispense_green,
                     bouncetime=300,
                 )
+                print(f"[GPIO] Event detect added for green dispense on pin {BUTTON_GREEN_DISPENSE}")
+
             except Exception as exc:
                 print(f"[GPIO] Failed to add event detection: {exc}")
 
         # Start background polling for pressure sensors
         threading.Thread(target=self._poll_pressure_sensors, daemon=True).start()
+        # Start the command interface if running in a terminal
+        threading.Thread(target=self._command_loop, daemon=True).start()
 
     def _log(self, message: str):
         """Helper to print debug messages with a consistent prefix."""
@@ -909,24 +930,32 @@ class CastlesAndCansGame:
 
     # GPIO event callbacks run in a background thread; schedule on the Tk loop
     def _gpio_tunnel(self, channel):
+        print(f"[GPIO] Tunnel sensor triggered on pin {channel}")
         self.root.after(0, self.tunnel_triggered)
 
     def _gpio_return(self, channel):
+        print(f"[GPIO] Ball return sensor triggered on pin {channel}")
         self.root.after(0, self.ball_returned)
 
     def _gpio_target1(self, channel):
+        print(f"[GPIO] IR target sensor triggered on pin {channel}")
         self.root.after(0, self.watchtower_ir_triggered)
 
     def _gpio_start(self, channel):
+        print(f"[GPIO] Start button pressed on pin {channel}")
         self.root.after(0, self.start_game)
 
     def _gpio_force(self, channel):
+        print(f"[GPIO] Force turn button pressed on pin {channel}")
         self.root.after(0, self.next_turn)
 
     def _gpio_dispense_red(self, channel):
+        print(f"[GPIO] Red dispense button pressed on pin {channel}")
         self.root.after(0, lambda: self.dispense_beer(Team.RED))
 
     def _gpio_dispense_green(self, channel):
+        print(f"[GPIO] Green dispense button pressed on pin {channel}")
+
         self.root.after(0, lambda: self.dispense_beer(Team.GREEN))
 
     def _poll_pressure_sensors(self):
@@ -986,6 +1015,66 @@ class CastlesAndCansGame:
             self.launch_ball()
         elif key == 'f':
             self.clear_tube()
+
+    # ---------------- Command Interface -----------------
+    def _command_loop(self):
+        """Read commands from stdin for manual testing."""
+        while True:
+            try:
+                line = input()
+            except EOFError:
+                break
+            if not line:
+                continue
+            self.root.after(0, self.process_command, line.strip())
+
+    def process_command(self, cmd: str):
+        """Handle a console command."""
+        parts = cmd.split()
+        if not parts:
+            return
+        action = parts[0].lower()
+        if action in ("watchtower_pressure", "wp"):
+            self.watchtower_pressure_hit()
+        elif action in ("watchtower_ir", "wi"):
+            self.watchtower_ir_triggered()
+        elif action == "servo" and len(parts) >= 3:
+            try:
+                num = int(parts[1])
+                angle = float(parts[2])
+            except ValueError:
+                print("[Cmd] Usage: servo <1-8> <angle>")
+                return
+            pin = self.servo_map.get(num)
+            if not pin:
+                print(f"[Cmd] Unknown servo {num}")
+                return
+            self.hw.set_servo_angle(pin, angle)
+        elif action == "hit" and len(parts) >= 2:
+            try:
+                target = int(parts[1])
+            except ValueError:
+                print("[Cmd] Usage: hit <target>")
+                return
+            self.hit_target(target)
+        elif action == "tunnel":
+            self.tunnel_triggered()
+        elif action == "return":
+            self.ball_returned()
+        elif action == "launch":
+            self.launch_ball()
+        elif action in ("start", "reset"):
+            self.start_game()
+        elif action == "dispense" and len(parts) >= 2:
+            team = parts[1].lower()
+            if team.startswith('r'):
+                self.dispense_beer(Team.RED)
+            elif team.startswith('g'):
+                self.dispense_beer(Team.GREEN)
+            else:
+                print("[Cmd] Usage: dispense <red|green>")
+        else:
+            print(f"[Cmd] Unknown command: {cmd}")
 
 
 if __name__ == "__main__":
