@@ -142,6 +142,9 @@ class HardwareInterface:
             SERVO_7,
             SERVO_8,
         ]
+        # Map BCM pins back to servo numbers for clearer logs
+        self.servo_numbers = {pin: i + 1 for i, pin in enumerate(self.servo_pins)}
+
         if self.available:
             outputs = [
                 RELAY_FAN,
@@ -221,16 +224,21 @@ class HardwareInterface:
         """Move servo to ``angle`` and record the position."""
 
         def worker():
-            duty = self._angle_to_duty(angle)
+            # Clamp angles to a typical 0-180 degree range
+            clamped = max(0, min(180, angle))
+            duty = self._angle_to_duty(clamped)
+
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
                 pwm.start(duty)
                 time.sleep(0.5)
                 pwm.stop()
-            print(f"[GPIO] Servo {pin} -> {angle}°")
+            num = self.servo_numbers.get(pin, pin)
+            print(f"[GPIO] Servo {num} (pin {pin}) -> {clamped}°")
 
         threading.Thread(target=worker, daemon=True).start()
-        self.servo_state[pin] = angle
+        self.servo_state[pin] = clamped
+
         self._save_servo_state()
 
     def reset_servos(self):
@@ -248,8 +256,11 @@ class HardwareInterface:
         """Rotate a servo asynchronously and return it to ``return_angle``."""
 
         def worker():
-            duty_start = self._angle_to_duty(angle)
-            duty_return = self._angle_to_duty(return_angle)
+            start = max(0, min(180, angle))
+            end = max(0, min(180, return_angle))
+            duty_start = self._angle_to_duty(start)
+            duty_return = self._angle_to_duty(end)
+
             if self.available:
                 pwm = GPIO.PWM(pin, 50)
                 pwm.start(duty_start)
@@ -259,10 +270,14 @@ class HardwareInterface:
                 pwm.ChangeDutyCycle(duty_return)
                 time.sleep(0.5)
                 pwm.stop()
-            print(f"[GPIO] Servo {pin} rotate {angle}° for {hold}s then {return_angle}°")
+            num = self.servo_numbers.get(pin, pin)
+            print(
+                f"[GPIO] Servo {num} (pin {pin}) rotate {start}° for {hold}s then {end}°"
+            )
 
         threading.Thread(target=worker, daemon=True).start()
-        self.servo_state[pin] = return_angle
+        self.servo_state[pin] = end
+
         self._save_servo_state()
 
     def _pulse(self, pin: int, duration: float = 0.5):
